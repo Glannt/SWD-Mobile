@@ -1,13 +1,44 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Image,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useAuth } from "../AuthContext";
+
+// Chọn URL API phù hợp với môi trường
+const getApiBaseUrl = () => {
+  try {
+    if (
+      Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      window.location
+    ) {
+      // Trong môi trường web, sử dụng current host thay vì localhost
+      const host = window.location.hostname;
+      const port = 3000; // Giữ nguyên port
+      return `http://${host}:${port}/api/v1`;
+    } else if (Platform.OS === "ios") {
+      // Trên iOS, sử dụng địa chỉ IP thay vì localhost
+      // TODO: Thay thế bằng địa chỉ IP của máy chủ thực tế hoặc domain
+      return "http://192.168.1.8:3000/api/v1"; // Thay đổi IP này
+    } else if (Platform.OS === "android") {
+      // Trên Android có thể sử dụng 10.0.2.2 để trỏ đến localhost của máy chủ
+      return "http://10.0.2.2:3000/api/v1";
+    }
+  } catch (e) {
+    console.error("[MOBILE] Error getting API base URL:", e);
+  }
+  // Fallback nếu không xác định được
+  return "http://localhost:3000/api/v1";
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 const editInfoStyles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", padding: 24 },
@@ -129,6 +160,47 @@ const forgotStyles = StyleSheet.create({
   nextBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });
 
+const profileStyles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#f6f8fb", padding: 16 },
+  pageTitle: {
+    fontSize: 26,
+    fontWeight: "bold",
+    marginBottom: 18,
+    color: "#23232b",
+    alignSelf: "center",
+  },
+  box: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 18,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  boxTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 10,
+    color: "#23232b",
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  label: { color: "#888", fontSize: 15 },
+  value: {
+    color: "#23232b",
+    fontSize: 15,
+    fontWeight: "500",
+    flexShrink: 1,
+    textAlign: "right",
+  },
+});
+
 export default function ProfileScreen() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
@@ -145,12 +217,218 @@ export default function ProfileScreen() {
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regShowPassword, setRegShowPassword] = useState(false);
+  const [regConfirmPassword, setRegConfirmPassword] = useState("");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showOld, setShowOld] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerError, setRegisterError] = useState("");
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const { accessToken, userId, setAuth, clearAuth } = useAuth();
+
+  const handleLogin = async () => {
+    setLoginLoading(true);
+    setLoginError("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Lỗi đăng nhập");
+      }
+      const data = await res.json();
+      console.log("[PROFILE] Login response:", data);
+
+      // Phân tích cấu trúc data để lấy token và thông tin user
+      const responseData = data.data || data;
+      const token = responseData.accessToken || responseData.access_token || "";
+
+      // Tìm thông tin user trong các vị trí có thể
+      let userData = null;
+
+      // Tìm userData ở các vị trí khác nhau trong response
+      if (responseData.user && typeof responseData.user === "object") {
+        userData = responseData.user;
+        console.log("[PROFILE] Found user data in responseData.user");
+      } else if (responseData._id || responseData.user_id) {
+        // Nếu thông tin user nằm ở root
+        userData = responseData;
+        console.log("[PROFILE] Using root data as user data");
+      }
+
+      // Đảm bảo có đủ thông tin user cần thiết
+      if (!userData) {
+        console.error("[PROFILE] Missing user data in login response");
+        throw new Error("Không tìm thấy thông tin người dùng");
+      }
+
+      // Log tất cả thông tin user để debug
+      console.log("[PROFILE] User data:", JSON.stringify(userData, null, 2));
+
+      // Lấy các ID cần thiết - xử lý nhiều trường hợp có thể
+      const userId = userData.user_id || userData.userId || "";
+
+      // Trích xuất MongoDB ObjectId (xử lý nhiều định dạng có thể)
+      let userObjectId = "";
+
+      // Kiểm tra các trường hợp có thể
+      if (
+        userData._id &&
+        typeof userData._id === "string" &&
+        /^[0-9a-fA-F]{24}$/.test(userData._id)
+      ) {
+        userObjectId = userData._id;
+      } else if (
+        userData._id &&
+        typeof userData._id === "object" &&
+        userData._id.$oid
+      ) {
+        // Trường hợp MongoDB extended JSON format { "$oid": "..." }
+        userObjectId = userData._id.$oid;
+      } else if (
+        userData.id &&
+        typeof userData.id === "string" &&
+        /^[0-9a-fA-F]{24}$/.test(userData.id)
+      ) {
+        userObjectId = userData.id;
+      } else if (userData.objectId && typeof userData.objectId === "string") {
+        userObjectId = userData.objectId;
+      }
+
+      console.log("[PROFILE] Extracted auth data:", {
+        token: token ? "Found" : "Missing",
+        userId,
+        userObjectId,
+      });
+
+      if (!userObjectId) {
+        console.warn("[PROFILE] No valid MongoDB ObjectId found in user data");
+      }
+
+      // Lưu thông tin đăng nhập vào AuthContext và lưu toàn bộ userData
+      setAuth(token, userId, userObjectId, userData);
+
+      setIsLoggedIn(true);
+      setEmail("");
+      setPassword("");
+    } catch (error) {
+      console.error("[PROFILE] Login error:", error);
+      setLoginError(error.message || "Có lỗi xảy ra");
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    if (regPassword !== regConfirmPassword) {
+      setRegisterError("Mật khẩu xác nhận không khớp.");
+      return;
+    }
+    setRegisterLoading(true);
+    setRegisterError("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: regEmail,
+          password: regPassword,
+          fullName: regName,
+          confirmPassword: regConfirmPassword,
+          isRegister: true,
+        }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setRegisterError(err.message || "Đăng ký thất bại");
+        setRegisterLoading(false);
+        return;
+      }
+      const data = await res.json();
+      const userId = data.data?.user?.user_id;
+      const userObjectId = data.data?.user?._id;
+      const accessToken = data.data?.accessToken;
+      console.log("[MOBILE REGISTER] data:", data);
+      console.log(
+        "[MOBILE REGISTER] userId:",
+        userId,
+        "userObjectId:",
+        userObjectId,
+        "accessToken:",
+        accessToken
+      );
+      setIsLoggedIn(true);
+      setAuth(accessToken || "", userId || "", userObjectId || "");
+
+      setRegisterLoading(false);
+    } catch (e) {
+      setRegisterError("Lỗi kết nối server");
+      setRegisterLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+    } catch (e) {
+      console.log("Logout request failed, clearing state anyway", e);
+    } finally {
+      setIsLoggedIn(false);
+      setProfile(null);
+      setEmail("");
+      setPassword("");
+      setLoginError("");
+      setShowOption(false);
+      setShowEditInfo(false);
+      setShowChangePassword(false);
+      setShowRegister(false);
+      setShowForgot(false);
+      clearAuth();
+    }
+  };
+
+  useEffect(() => {
+    if (isLoggedIn && userId) {
+      setProfileLoading(true);
+      setProfileError("");
+      fetch(`${API_BASE_URL}/users/${userId}`, {
+        credentials: "include",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("[PROFILE FETCH] API response:", data);
+          setProfile(data.data ? data.data : data);
+          setProfileLoading(false);
+        })
+        .catch((err) => {
+          console.log("[PROFILE FETCH ERROR]", err);
+          setProfileError("Không lấy được thông tin tài khoản");
+          setProfileLoading(false);
+        });
+    }
+  }, [isLoggedIn, userId, accessToken]);
 
   if (isLoggedIn && showOption && showEditInfo) {
     return (
@@ -364,7 +642,7 @@ export default function ProfileScreen() {
           />
           <TextInput
             style={loginStyles.input}
-            placeholder="Joseph Ren"
+            placeholder="Họ và tên"
             value={regName}
             onChangeText={setRegName}
             autoCapitalize="words"
@@ -380,7 +658,7 @@ export default function ProfileScreen() {
           />
           <TextInput
             style={loginStyles.input}
-            placeholder="Joseph.Ren@Mail.Com"
+            placeholder="Email"
             value={regEmail}
             onChangeText={setRegEmail}
             keyboardType="email-address"
@@ -412,14 +690,34 @@ export default function ProfileScreen() {
             />
           </TouchableOpacity>
         </View>
+        <View style={loginStyles.inputWrap}>
+          <Ionicons
+            name="lock-closed-outline"
+            size={20}
+            color="#888"
+            style={loginStyles.inputIcon}
+          />
+          <TextInput
+            style={loginStyles.input}
+            placeholder="Nhập lại mật khẩu"
+            value={regConfirmPassword}
+            onChangeText={setRegConfirmPassword}
+            secureTextEntry={!regShowPassword}
+            autoCapitalize="none"
+            placeholderTextColor="#888"
+          />
+        </View>
+        {registerError ? (
+          <Text style={{ color: "red", marginBottom: 8 }}>{registerError}</Text>
+        ) : null}
         <TouchableOpacity
           style={loginStyles.loginBtn}
-          onPress={() => {
-            setIsLoggedIn(true);
-            setShowRegister(false);
-          }}
+          onPress={handleRegister}
+          disabled={registerLoading}
         >
-          <Text style={loginStyles.loginBtnText}>Đăng ký</Text>
+          <Text style={loginStyles.loginBtnText}>
+            {registerLoading ? "Đang đăng ký..." : "Đăng ký"}
+          </Text>
         </TouchableOpacity>
         <View style={loginStyles.registerRow}>
           <Text style={loginStyles.registerLabel}>Bạn đã có tài khoản? </Text>
@@ -491,7 +789,7 @@ export default function ProfileScreen() {
           />
           <TextInput
             style={loginStyles.input}
-            placeholder="__@gmail.com"
+            placeholder="Nhập email"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -523,6 +821,9 @@ export default function ProfileScreen() {
             />
           </TouchableOpacity>
         </View>
+        {loginError ? (
+          <Text style={{ color: "red", marginBottom: 8 }}>{loginError}</Text>
+        ) : null}
         <TouchableOpacity
           style={loginStyles.forgotBtn}
           onPress={() => setShowForgot(true)}
@@ -531,9 +832,12 @@ export default function ProfileScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={loginStyles.loginBtn}
-          onPress={() => setIsLoggedIn(true)}
+          onPress={handleLogin}
+          disabled={loginLoading}
         >
-          <Text style={loginStyles.loginBtnText}>Đăng nhập</Text>
+          <Text style={loginStyles.loginBtnText}>
+            {loginLoading ? "Đang đăng nhập..." : "Đăng nhập"}
+          </Text>
         </TouchableOpacity>
         <View style={loginStyles.registerRow}>
           <Text style={loginStyles.registerLabel}>Chưa có tài khoản? </Text>
@@ -548,6 +852,119 @@ export default function ProfileScreen() {
         </View>
         <TouchableOpacity style={loginStyles.googleBtn}>
           <Text style={loginStyles.googleBtnText}>GOOGLE</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (isLoggedIn && !showOption && !showEditInfo && !showChangePassword) {
+    if (profileLoading) {
+      return (
+        <View style={profileStyles.container}>
+          <Text>Đang tải thông tin...</Text>
+        </View>
+      );
+    }
+    if (profileError) {
+      return (
+        <View style={profileStyles.container}>
+          <Text style={{ color: "red" }}>{profileError}</Text>
+        </View>
+      );
+    }
+    if (!profile) {
+      return (
+        <View style={profileStyles.container}>
+          <Text>Không có dữ liệu người dùng.</Text>
+        </View>
+      );
+    }
+    // Dữ liệu thực tế từ API
+    const user = profile as any;
+    return (
+      <View style={profileStyles.container}>
+        <Text style={profileStyles.pageTitle}>Hồ sơ cá nhân</Text>
+        <View style={profileStyles.box}>
+          <Text style={profileStyles.boxTitle}>Thông tin cơ bản</Text>
+          <View style={profileStyles.row}>
+            <Text style={profileStyles.label}>Họ và tên</Text>
+            <Text style={profileStyles.value}>{user.fullName}</Text>
+          </View>
+          <View style={profileStyles.row}>
+            <Text style={profileStyles.label}>Email</Text>
+            <Text style={profileStyles.value}>{user.email}</Text>
+          </View>
+          <View style={profileStyles.row}>
+            <Text style={profileStyles.label}>Vai trò</Text>
+            <Text style={profileStyles.value}>{user.role}</Text>
+          </View>
+          <View style={profileStyles.row}>
+            <Text style={profileStyles.label}>Trạng thái</Text>
+            <Text
+              style={[
+                profileStyles.value,
+                {
+                  color:
+                    user.status === "active" || user.status === "Hoạt động"
+                      ? "#22c55e"
+                      : "#ef4444",
+                },
+              ]}
+            >
+              {user.status === "active" ? "Hoạt động" : user.status}
+            </Text>
+          </View>
+        </View>
+        <View style={profileStyles.box}>
+          <Text style={profileStyles.boxTitle}>Thông tin tài khoản</Text>
+          <View style={profileStyles.row}>
+            <Text style={profileStyles.label}>ID người dùng</Text>
+            <Text style={profileStyles.value}>{user.user_id}</Text>
+          </View>
+          <View style={profileStyles.row}>
+            <Text style={profileStyles.label}>Xác thực email</Text>
+            <Text
+              style={[
+                profileStyles.value,
+                { color: user.isVerified ? "#22c55e" : "#ef4444" },
+              ]}
+            >
+              {user.isVerified ? "Đã xác thực" : "Chưa xác thực"}
+            </Text>
+          </View>
+        </View>
+        <View style={profileStyles.box}>
+          <Text style={profileStyles.boxTitle}>Thông tin thời gian</Text>
+          <View style={profileStyles.row}>
+            <Text style={profileStyles.label}>Ngày tạo tài khoản</Text>
+            <Text style={profileStyles.value}>
+              {user.createdAt
+                ? new Date(user.createdAt).toLocaleString("vi-VN")
+                : ""}
+            </Text>
+          </View>
+          <View style={profileStyles.row}>
+            <Text style={profileStyles.label}>Cập nhật lần cuối</Text>
+            <Text style={profileStyles.value}>
+              {user.updatedAt
+                ? new Date(user.updatedAt).toLocaleString("vi-VN")
+                : ""}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={{
+            marginTop: 24,
+            backgroundColor: "#ef4444",
+            borderRadius: 12,
+            paddingVertical: 14,
+            alignItems: "center",
+          }}
+          onPress={handleLogout}
+        >
+          <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+            Đăng xuất
+          </Text>
         </TouchableOpacity>
       </View>
     );

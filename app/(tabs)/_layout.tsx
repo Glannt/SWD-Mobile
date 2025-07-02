@@ -13,6 +13,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName="chat"
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
         headerShown: false,
@@ -41,20 +42,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="history"
-        options={{
-          title: "Lịch sử",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="time-outline" size={size ?? 28} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
           title: "Thông tin",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size ?? 28} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Cài đặt",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="settings-outline" size={size ?? 28} color={color} />
           ),
         }}
       />
