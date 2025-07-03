@@ -28,6 +28,6 @@ export default function Index() {
     checkApiConnection();
   }, [debug]);
 
-  // Chuyển hướng đến trang chat
-  return <Redirect href="/chat" />;
+  // Chuyển hướng đến trang chủ
+  return <Redirect href="/home" />;
 }

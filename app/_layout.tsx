@@ -11,9 +11,9 @@ import "react-native-reanimated";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { AuthProvider } from "./AuthContext";
 
-// Component cho path "/" để redirect đến "/chat"
+// Component cho path "/" để redirect đến "/home"
 export function Index() {
-  return <Redirect href="/chat" />;
+  return <Redirect href="/home" />;
 }
 
 export default function RootLayout() {

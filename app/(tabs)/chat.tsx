@@ -19,10 +19,6 @@ import { useChatMobile } from "../../hooks/useChatMobile";
 import { getApiBaseUrl } from "../../utils/api";
 import { useAuth } from "../AuthContext";
 
-// Dummy: kiểm tra đăng nhập (bạn có thể thay bằng state thực tế)
-const isLoggedIn = true; // TODO: thay bằng state thực tế
-const user = { user_id: "demo" }; // TODO: thay bằng user thực tế
-
 // Component cho hiệu ứng loading
 const LoadingBubble = () => {
   // Animation cho dấu chấm loading
@@ -64,6 +60,7 @@ const LoadingBubble = () => {
 
 export default function ChatScreen() {
   const { accessToken, userId } = useAuth();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const chat = useChatMobile({ accessToken, userId });
   const [input, setInput] = useState("");
   const flatListRef = useRef(null);
@@ -75,14 +72,22 @@ export default function ChatScreen() {
   const API_BASE_URL = getApiBaseUrl();
   const router = useRouter();
 
-  // Load sessions on mount
+  // Kiểm tra trạng thái đăng nhập
   useEffect(() => {
     if (accessToken && userId) {
-      chat.loadSessions();
+      setIsLoggedIn(true);
+    } else {
+      setIsLoggedIn(false);
     }
+  }, [accessToken, userId]);
 
-    // Thiết lập hệ thống kiểm tra kết nối
-    startConnectionMonitoring();
+  // Load sessions on mount - chỉ khi đã đăng nhập
+  useEffect(() => {
+    if (isLoggedIn) {
+      chat.loadSessions();
+      // Thiết lập hệ thống kiểm tra kết nối
+      startConnectionMonitoring();
+    }
 
     return () => {
       // Dọn dẹp các interval và timeout khi unmount
@@ -90,7 +95,7 @@ export default function ChatScreen() {
       if (reconnectTimeoutRef.current)
         clearTimeout(reconnectTimeoutRef.current);
     };
-  }, [accessToken, userId]);
+  }, [isLoggedIn]);
 
   // Hệ thống theo dõi kết nối
   const startConnectionMonitoring = () => {
@@ -173,7 +178,7 @@ export default function ChatScreen() {
 
   // Hiển thị lỗi khi có
   useEffect(() => {
-    if (chat.error) {
+    if (chat.error && isLoggedIn) {
       // Hiển thị lỗi dưới dạng alert
       Alert.alert("Thông báo", chat.error, [
         { text: "Đóng", onPress: () => chat.setError("") },
@@ -187,17 +192,17 @@ export default function ChatScreen() {
         handleConnectionError(chat.error);
       }
     }
-  }, [chat.error]);
+  }, [chat.error, isLoggedIn]);
 
   // Auto-scroll xuống cuối khi có tin nhắn mới
   useEffect(() => {
-    if (chat.messages.length > 0) {
+    if (chat.messages.length > 0 && isLoggedIn) {
       setTimeout(
         () => flatListRef.current?.scrollToEnd({ animated: true }),
         300
       );
     }
-  }, [chat.messages]);
+  }, [chat.messages, isLoggedIn]);
 
   // Khi chọn session
   const handleSelectSession = async (session) => {
@@ -289,15 +294,15 @@ export default function ChatScreen() {
     }
   };
 
-  // Nếu chưa đăng nhập
-  if (!accessToken || !userId) {
+  // Nếu chưa đăng nhập, hiển thị màn hình "bắt đầu ngay"
+  if (!isLoggedIn) {
     return (
       <View style={chatStyles.welcomeScreen}>
         <TouchableOpacity
           style={chatStyles.backButton}
           onPress={() => {
-            // Quay lại trang trước (tạm thời không có chức năng)
-            Alert.alert("Thông báo", "Quay lại trang chính");
+            // Quay lại trang chính (home)
+            router.push("/(tabs)/home");
           }}
         >
           <Ionicons name="chevron-back" size={24} color="#000" />
@@ -312,7 +317,7 @@ export default function ChatScreen() {
           </View>
 
           <Text style={chatStyles.welcomeHeader}>
-            Chào mừng đến với{"\n"}FChatCareer
+            Chào mừng đến với{"\n"}FCareerChat
           </Text>
 
           <TouchableOpacity
@@ -329,11 +334,12 @@ export default function ChatScreen() {
     );
   }
 
+  // Nếu đã đăng nhập, hiển thị giao diện chat bình thường
   return (
     <View style={chatStyles.container}>
       {/* Header */}
       <View style={chatStyles.header}>
-        <Text style={chatStyles.headerTitle}>FPT University AI Assistant</Text>
+        <Text style={chatStyles.headerTitle}>FCareerChat</Text>
         <TouchableOpacity
           style={chatStyles.sessionBtn}
           onPress={() => setShowSessions(true)}
@@ -539,13 +545,19 @@ const chatStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: 32,
+    paddingTop: 42,
     paddingBottom: 12,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
+    marginTop: 10,
   },
-  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#23232b" },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#23232b",
+    marginTop: 10,
+  },
   sessionBtn: {
     flexDirection: "row",
     alignItems: "center",
