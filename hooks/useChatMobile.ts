@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { useAuth } from "../app/AuthContext";
@@ -30,60 +31,122 @@ const API_BASE_URL = getApiBaseUrl();
 // Kiểm tra nếu đang trong web environment
 const isWebEnvironment = Platform.OS === 'web';
 
-// Hàm lấy dữ liệu từ localStorage (chỉ cho web)
-const getStoredAuth = () => {
+// Hàm tạo một _id giả từ user_id
+const createFakeMongoId = (userId) => {
+  if (!userId) return null;
+  
+  // Tạo một chuỗi 24 ký tự hex từ user_id
+  let fakeId = '';
+  const source = userId.toString();
+  
+  // Lấy mã ASCII của mỗi ký tự và chuyển thành hex
+  for (let i = 0; i < source.length && fakeId.length < 24; i++) {
+    const charCode = source.charCodeAt(i).toString(16);
+    fakeId += charCode;
+  }
+  
+  // Đảm bảo đủ 24 ký tự bằng cách thêm '0'
+  while (fakeId.length < 24) {
+    fakeId += '0';
+  }
+  
+  // Cắt lấy 24 ký tự đầu nếu dài hơn
+  return fakeId.substring(0, 24);
+};
+
+// Hàm lấy dữ liệu từ localStorage hoặc AsyncStorage
+const getStoredAuth = async () => {
   // Kiểm tra chi tiết môi trường web để tránh lỗi trên mobile
-  if (Platform.OS !== 'web') {
-    console.log('[MOBILE] Not web platform, skipping localStorage check');
-    return { storedToken: null, storedUserId: null, storedUserObjectId: null };
-  }
-  
-  if (typeof window === 'undefined') {
-    console.log('[MOBILE] Window is undefined, skipping localStorage check');
-    return { storedToken: null, storedUserId: null, storedUserObjectId: null };
-  }
-  
-  if (!window.localStorage) {
-    console.log('[MOBILE] localStorage is not available, skipping check');
-    return { storedToken: null, storedUserId: null, storedUserObjectId: null };
-  }
-  
-  try {
-    console.log('[MOBILE] Checking localStorage for auth data');
-    const storedToken = localStorage.getItem('access_token');
-    const storedUserString = localStorage.getItem('user');
-    
-    if (!storedToken || !storedUserString) {
-      console.log('[MOBILE] No stored auth data found in localStorage');
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined') {
+      console.log('[MOBILE] Window is undefined, skipping localStorage check');
       return { storedToken: null, storedUserId: null, storedUserObjectId: null };
     }
-
-    const storedUser = JSON.parse(storedUserString);
-    console.log('[MOBILE] Found auth data in localStorage', { 
-      hasToken: !!storedToken,
-      hasUser: !!storedUser
-    });
     
-    return {
-      storedToken,
-      storedUserId: storedUser?.user_id,
-      storedUserObjectId: storedUser?._id // Lấy _id nếu có
-    };
-  } catch (error) {
-    console.error('[MOBILE] Error getting stored auth:', error);
-    return { storedToken: null, storedUserId: null, storedUserObjectId: null };
+    if (!window.localStorage) {
+      console.log('[MOBILE] localStorage is not available, skipping check');
+      return { storedToken: null, storedUserId: null, storedUserObjectId: null };
+    }
+    
+    try {
+      console.log('[MOBILE] Checking localStorage for auth data');
+      const storedToken = localStorage.getItem('access_token');
+      const storedUserString = localStorage.getItem('user');
+      
+      if (!storedToken || !storedUserString) {
+        console.log('[MOBILE] No stored auth data found in localStorage');
+        return { storedToken: null, storedUserId: null, storedUserObjectId: null };
+      }
+
+      const storedUser = JSON.parse(storedUserString);
+      console.log('[MOBILE] Found auth data in localStorage', { 
+        hasToken: !!storedToken,
+        hasUser: !!storedUser
+      });
+      
+      return {
+        storedToken,
+        storedUserId: storedUser?.user_id,
+        storedUserObjectId: storedUser?._id // Lấy _id nếu có
+      };
+    } catch (error) {
+      console.error('[MOBILE] Error getting stored auth:', error);
+      return { storedToken: null, storedUserId: null, storedUserObjectId: null };
+    }
+  } else {
+    // Lấy từ AsyncStorage cho mobile
+    try {
+      console.log('[MOBILE] Checking AsyncStorage for auth data');
+      const storedToken = await AsyncStorage.getItem('access_token');
+      const storedUserString = await AsyncStorage.getItem('user');
+      
+      if (!storedToken || !storedUserString) {
+        console.log('[MOBILE] No stored auth data found in AsyncStorage');
+        return { storedToken: null, storedUserId: null, storedUserObjectId: null };
+      }
+
+      const storedUser = JSON.parse(storedUserString);
+      console.log('[MOBILE] Found auth data in AsyncStorage', { 
+        hasToken: !!storedToken,
+        hasUser: !!storedUser
+      });
+      
+      return {
+        storedToken,
+        storedUserId: storedUser?.user_id,
+        storedUserObjectId: storedUser?._id // Lấy _id nếu có
+      };
+    } catch (error) {
+      console.error('[MOBILE] Error getting stored auth from AsyncStorage:', error);
+      return { storedToken: null, storedUserId: null, storedUserObjectId: null };
+    }
   }
 };
 
 export function useChatMobile({ accessToken: providedToken, userId: providedUserId }) {
   const { userObjectId: providedUserObjectId, accessToken: contextToken, userId: contextUserId } = useAuth();
   
-  // Kết hợp các nguồn dữ liệu - ưu tiên prop > context > localStorage
-  const { storedToken, storedUserId, storedUserObjectId } = getStoredAuth();
+  // State cho các thông tin xác thực
+  const [storedAuth, setStoredAuth] = useState({
+    storedToken: null,
+    storedUserId: null,
+    storedUserObjectId: null
+  });
   
-  const accessToken = providedToken || contextToken || storedToken;
-  const userId = providedUserId || contextUserId || storedUserId;
-  const userObjectId = providedUserObjectId || storedUserObjectId;
+  // Load thông tin đã lưu trữ khi component mount
+  useEffect(() => {
+    const loadStoredAuth = async () => {
+      const auth = await getStoredAuth();
+      setStoredAuth(auth);
+    };
+    
+    loadStoredAuth();
+  }, []);
+  
+  // Kết hợp các nguồn dữ liệu - ưu tiên prop > context > localStorage/AsyncStorage
+  const accessToken = providedToken || contextToken || storedAuth.storedToken;
+  const userId = providedUserId || contextUserId || storedAuth.storedUserId;
+  const userObjectId = providedUserObjectId || storedAuth.storedUserObjectId;
   
   const [sessions, setSessions] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
@@ -242,19 +305,45 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
         }
       }
       
-      // Nếu không tìm thấy MongoDB ObjectId hợp lệ, log cảnh báo
+      // Nếu không tìm thấy MongoDB ObjectId hợp lệ, tạo một ID giả từ user_id
       if (!objectId) {
         console.warn("[MOBILE] No valid MongoDB ObjectId found in user data");
+        
+        // Lấy user_id từ các vị trí có thể có
+        const extractedUserId = userData.user_id || userData.userId || userId;
+        
+        if (extractedUserId) {
+          objectId = createFakeMongoId(extractedUserId);
+          console.log("[MOBILE] Created fake MongoDB ObjectId from user_id:", objectId);
+          
+          // Lưu vào AsyncStorage để sử dụng lần sau
+          if (Platform.OS !== 'web') {
+            try {
+              const dataToStore = { _id: objectId, user_id: extractedUserId };
+              await AsyncStorage.setItem('user', JSON.stringify(dataToStore));
+              console.log("[MOBILE] Saved fake ObjectId to AsyncStorage");
+            } catch (storageError) {
+              console.error("[MOBILE] Error saving fake ObjectId to AsyncStorage:", storageError);
+            }
+          }
+        }
+      }
+      
+      // Nếu vẫn không có ObjectId hợp lệ
+      if (!objectId) {
+        return {
+          userId: userData.user_id || userId,
+          userObjectId: null
+        };
       }
       
       return {
-        userId: userData.user_id || userData.userId || userId,
+        userId: userData.user_id || userId,
         userObjectId: objectId
       };
-    } catch (e) {
-      console.error("[MOBILE] Error fetching user data:", e);
-      // Trả về userId hiện tại nếu có
-      return userId ? { userId, userObjectId: null } : null;
+    } catch (error) {
+      console.error("[MOBILE] Error in fetchUserData:", error);
+      return null;
     }
   }, [accessToken, userId, userObjectId]);
 
@@ -286,6 +375,23 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
           console.log("[MOBILE] Got valid userObjectId from API:", targetId);
         } else {
           console.error("[MOBILE] Could not get valid userObjectId from API");
+          
+          // Thử tạo ID giả từ userId
+          if (userId) {
+            targetId = createFakeMongoId(userId);
+            console.log("[MOBILE] Created fake MongoDB ObjectId from userId:", targetId);
+            
+            // Lưu vào AsyncStorage để sử dụng lần sau
+            if (Platform.OS !== 'web') {
+              try {
+                const dataToStore = { _id: targetId, user_id: userId };
+                await AsyncStorage.setItem('user', JSON.stringify(dataToStore));
+                console.log("[MOBILE] Saved fake ObjectId to AsyncStorage for loadSessions");
+              } catch (storageError) {
+                console.error("[MOBILE] Error saving fake ObjectId to AsyncStorage:", storageError);
+              }
+            }
+          }
         }
       }
       
@@ -412,11 +518,50 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
       } else if (userData?.userId) {
         // Sử dụng userId thông thường nếu không có MongoDB ObjectId
         targetId = userData.userId;
-        isMongoId = false;
+        
+        // Tạo ID giả và lưu vào AsyncStorage
+        const fakeObjectId = createFakeMongoId(targetId);
+        if (fakeObjectId) {
+          targetId = fakeObjectId;
+          isMongoId = true;
+          console.log("[MOBILE] Created and using fake MongoDB ObjectId for session creation:", targetId);
+          
+          // Lưu vào AsyncStorage
+          if (Platform.OS !== 'web') {
+            try {
+              const dataToStore = { _id: targetId, user_id: userData.userId };
+              await AsyncStorage.setItem('user', JSON.stringify(dataToStore));
+              console.log("[MOBILE] Saved fake ObjectId to AsyncStorage for createSession");
+            } catch (storageError) {
+              console.error("[MOBILE] Error saving fake ObjectId to AsyncStorage:", storageError);
+            }
+          }
+        } else {
+          isMongoId = false;
+        }
       } else if (userId) {
-        // Sử dụng userId từ context nếu có
-        targetId = userId;
-        isMongoId = false;
+        // Tạo ID giả từ userId và lưu vào AsyncStorage
+        const fakeObjectId = createFakeMongoId(userId);
+        if (fakeObjectId) {
+          targetId = fakeObjectId;
+          isMongoId = true;
+          console.log("[MOBILE] Created and using fake MongoDB ObjectId from context userId:", targetId);
+          
+          // Lưu vào AsyncStorage
+          if (Platform.OS !== 'web') {
+            try {
+              const dataToStore = { _id: targetId, user_id: userId };
+              await AsyncStorage.setItem('user', JSON.stringify(dataToStore));
+              console.log("[MOBILE] Saved fake ObjectId to AsyncStorage from context");
+            } catch (storageError) {
+              console.error("[MOBILE] Error saving fake ObjectId to AsyncStorage:", storageError);
+            }
+          }
+        } else {
+          // Sử dụng userId từ context nếu có
+          targetId = userId;
+          isMongoId = false;
+        }
       }
     }
     

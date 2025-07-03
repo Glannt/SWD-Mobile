@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Platform } from "react-native";
 
@@ -50,41 +51,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // Khôi phục auth từ localStorage khi ở web
   useEffect(() => {
     // Kiểm tra chi tiết môi trường web để tránh lỗi trên mobile
-    if (Platform.OS !== "web") {
-      console.log("[AUTH] Not web platform, skipping localStorage restore");
-      return;
-    }
-
-    if (typeof window === "undefined") {
-      console.log("[AUTH] Window is undefined, skipping localStorage restore");
-      return;
-    }
-
-    if (!window.localStorage) {
-      console.log("[AUTH] localStorage is not available, skipping restore");
-      return;
-    }
-
-    // Nếu là web, thử khôi phục từ localStorage
-    try {
-      console.log("[AUTH] Checking localStorage for auth data");
-      const storedToken = localStorage.getItem("access_token");
-      const storedUserStr = localStorage.getItem("user");
-
-      if (storedToken) {
-        console.log("[AUTH] Found token in localStorage");
-        setAccessToken(storedToken);
+    if (Platform.OS === "web") {
+      // Khôi phục auth từ localStorage cho web
+      if (typeof window === "undefined") {
+        console.log(
+          "[AUTH] Window is undefined, skipping localStorage restore"
+        );
+        return;
       }
 
-      if (storedUserStr) {
-        console.log("[AUTH] Found user data in localStorage");
-        const storedUser = JSON.parse(storedUserStr);
-        setUserId(storedUser?.user_id || "");
-        setUserObjectId(storedUser?._id || "");
-        setUserData(storedUser || null);
+      if (!window.localStorage) {
+        console.log("[AUTH] localStorage is not available, skipping restore");
+        return;
       }
-    } catch (e) {
-      console.error("[AUTH] Error restoring from localStorage:", e);
+
+      // Nếu là web, thử khôi phục từ localStorage
+      try {
+        console.log("[AUTH] Checking localStorage for auth data");
+        const storedToken = localStorage.getItem("access_token");
+        const storedUserStr = localStorage.getItem("user");
+
+        if (storedToken) {
+          console.log("[AUTH] Found token in localStorage");
+          setAccessToken(storedToken);
+        }
+
+        if (storedUserStr) {
+          console.log("[AUTH] Found user data in localStorage");
+          const storedUser = JSON.parse(storedUserStr);
+          setUserId(storedUser?.user_id || "");
+          setUserObjectId(storedUser?._id || "");
+          setUserData(storedUser || null);
+        }
+      } catch (e) {
+        console.error("[AUTH] Error restoring from localStorage:", e);
+      }
+    } else {
+      // Khôi phục auth từ AsyncStorage cho mobile
+      const restoreFromAsyncStorage = async () => {
+        try {
+          console.log("[AUTH] Checking AsyncStorage for auth data");
+          const storedToken = await AsyncStorage.getItem("access_token");
+          const storedUserStr = await AsyncStorage.getItem("user");
+
+          if (storedToken) {
+            console.log("[AUTH] Found token in AsyncStorage");
+            setAccessToken(storedToken);
+          }
+
+          if (storedUserStr) {
+            console.log("[AUTH] Found user data in AsyncStorage");
+            const storedUser = JSON.parse(storedUserStr);
+            setUserId(storedUser?.user_id || "");
+            setUserObjectId(storedUser?._id || "");
+            setUserData(storedUser || null);
+          }
+        } catch (e) {
+          console.error("[AUTH] Error restoring from AsyncStorage:", e);
+        }
+      };
+
+      restoreFromAsyncStorage();
     }
   }, []);
 
@@ -117,35 +144,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     // Lưu vào localStorage chỉ khi ở môi trường web
-    if (Platform.OS !== "web") {
-      console.log("[AUTH] Not web platform, skipping localStorage save");
-      return;
-    }
+    if (Platform.OS === "web") {
+      if (typeof window === "undefined") {
+        console.log("[AUTH] Window is undefined, skipping localStorage save");
+        return;
+      }
 
-    if (typeof window === "undefined") {
-      console.log("[AUTH] Window is undefined, skipping localStorage save");
-      return;
-    }
+      if (!window.localStorage) {
+        console.log("[AUTH] localStorage is not available, skipping save");
+        return;
+      }
 
-    if (!window.localStorage) {
-      console.log("[AUTH] localStorage is not available, skipping save");
-      return;
-    }
+      try {
+        console.log("[AUTH] Saving auth data to localStorage");
+        localStorage.setItem("access_token", token);
 
-    try {
-      console.log("[AUTH] Saving auth data to localStorage");
-      localStorage.setItem("access_token", token);
+        // Lưu userData đầy đủ hoặc object tối thiểu vào localStorage
+        const userToSave = userData || {
+          _id: userObjectId,
+          user_id: userId,
+        };
 
-      // Lưu userData đầy đủ hoặc object tối thiểu vào localStorage
-      const userToSave = userData || {
-        _id: userObjectId,
-        user_id: userId,
+        localStorage.setItem("user", JSON.stringify(userToSave));
+        console.log("[AUTH] Saved to localStorage successfully");
+      } catch (e) {
+        console.error("[AUTH] Error saving to localStorage:", e);
+      }
+    } else {
+      // Lưu vào AsyncStorage cho mobile
+      const saveToAsyncStorage = async () => {
+        try {
+          console.log("[AUTH] Saving auth data to AsyncStorage");
+          await AsyncStorage.setItem("access_token", token);
+
+          // Lưu userData đầy đủ hoặc object tối thiểu vào AsyncStorage
+          const userToSave = userData || {
+            _id: userObjectId,
+            user_id: userId,
+          };
+
+          await AsyncStorage.setItem("user", JSON.stringify(userToSave));
+          console.log("[AUTH] Saved to AsyncStorage successfully");
+        } catch (e) {
+          console.error("[AUTH] Error saving to AsyncStorage:", e);
+        }
       };
 
-      localStorage.setItem("user", JSON.stringify(userToSave));
-      console.log("[AUTH] Saved to localStorage successfully");
-    } catch (e) {
-      console.error("[AUTH] Error saving to localStorage:", e);
+      saveToAsyncStorage();
     }
   };
 
@@ -159,28 +204,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setUserData(null);
 
     // Xóa khỏi localStorage chỉ khi ở môi trường web
-    if (Platform.OS !== "web") {
-      console.log("[AUTH] Not web platform, skipping localStorage clear");
-      return;
-    }
+    if (Platform.OS === "web") {
+      if (typeof window === "undefined") {
+        console.log("[AUTH] Window is undefined, skipping localStorage clear");
+        return;
+      }
 
-    if (typeof window === "undefined") {
-      console.log("[AUTH] Window is undefined, skipping localStorage clear");
-      return;
-    }
+      if (!window.localStorage) {
+        console.log("[AUTH] localStorage is not available, skipping clear");
+        return;
+      }
 
-    if (!window.localStorage) {
-      console.log("[AUTH] localStorage is not available, skipping clear");
-      return;
-    }
+      try {
+        console.log("[AUTH] Clearing auth data from localStorage");
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("user");
+        console.log("[AUTH] Cleared from localStorage successfully");
+      } catch (e) {
+        console.error("[AUTH] Error clearing localStorage:", e);
+      }
+    } else {
+      // Xóa khỏi AsyncStorage cho mobile
+      const clearFromAsyncStorage = async () => {
+        try {
+          console.log("[AUTH] Clearing auth data from AsyncStorage");
+          await AsyncStorage.removeItem("access_token");
+          await AsyncStorage.removeItem("user");
+          console.log("[AUTH] Cleared from AsyncStorage successfully");
+        } catch (e) {
+          console.error("[AUTH] Error clearing AsyncStorage:", e);
+        }
+      };
 
-    try {
-      console.log("[AUTH] Clearing auth data from localStorage");
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("user");
-      console.log("[AUTH] Cleared from localStorage successfully");
-    } catch (e) {
-      console.error("[AUTH] Error clearing localStorage:", e);
+      clearFromAsyncStorage();
     }
   };
 

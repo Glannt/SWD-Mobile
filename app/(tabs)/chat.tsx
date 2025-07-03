@@ -97,13 +97,13 @@ export default function ChatScreen() {
     // Hủy các interval cũ nếu có
     if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
 
-    // Thiết lập ping mỗi 30 giây để giữ kết nối hoạt động
+    // Thiết lập ping mỗi 90 giây để giữ kết nối hoạt động
     pingIntervalRef.current = setInterval(() => {
       if (chat.currentSession) {
         // Ping session hiện tại để giữ kết nối
         pingSession(chat.currentSession.sessionId);
       }
-    }, 30000); // 30 giây
+    }, 90000); // 90 giây
   };
 
   // Hàm ping session để giữ kết nối
