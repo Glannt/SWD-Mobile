@@ -1,5 +1,9 @@
-import React from "react";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import React, { useEffect } from "react";
 import {
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -40,9 +44,32 @@ const getApiBaseUrl = () => {
 const API_BASE_URL = getApiBaseUrl();
 
 export default function SettingsScreen() {
-  const { accessToken, userId, clearAuth } = useAuth();
+  const { accessToken, userId, userData, clearAuth } = useAuth();
   const [twoFactorEnabled, setTwoFactorEnabled] = React.useState(false);
   const [emailNotifications, setEmailNotifications] = React.useState(true);
+  const router = useRouter();
+
+  // Kiểm tra đăng nhập
+  const isLoggedIn = !!accessToken;
+
+  // Debug: Kiểm tra dữ liệu trong AsyncStorage khi component mount
+  useEffect(() => {
+    const checkAsyncStorage = async () => {
+      try {
+        const token = await AsyncStorage.getItem("access_token");
+        const user = await AsyncStorage.getItem("user");
+        console.log("[SETTINGS] AsyncStorage check on mount:", {
+          hasToken: !!token,
+          hasUser: !!user,
+          tokenPreview: token ? `${token.substring(0, 15)}...` : null,
+        });
+      } catch (e) {
+        console.error("[SETTINGS] Error checking AsyncStorage:", e);
+      }
+    };
+
+    checkAsyncStorage();
+  }, []);
 
   // Xử lý đăng xuất
   const handleLogout = async () => {
@@ -64,20 +91,81 @@ export default function SettingsScreen() {
       } else {
         console.log("[SETTINGS] No access token, skipping API call");
       }
+
+      // Xóa dữ liệu khỏi AsyncStorage trực tiếp (đảm bảo xóa)
+      console.log(
+        `[SETTINGS] Directly clearing AsyncStorage on ${Platform.OS}`
+      );
+
+      // Sử dụng multiRemove để xóa nhiều keys cùng lúc
+      const keysToRemove = ["access_token", "user"];
+      await AsyncStorage.multiRemove(keysToRemove);
+
+      // Kiểm tra xem đã xóa thành công chưa
+      const tokenAfter = await AsyncStorage.getItem("access_token");
+      const userAfter = await AsyncStorage.getItem("user");
+      console.log("[SETTINGS] AsyncStorage after direct clear:", {
+        tokenExists: !!tokenAfter,
+        userExists: !!userAfter,
+      });
+
+      // Nếu vẫn còn dữ liệu, thử xóa lại từng item
+      if (tokenAfter || userAfter) {
+        console.log(
+          "[SETTINGS] Some data still exists, trying individual removal"
+        );
+        if (tokenAfter) await AsyncStorage.removeItem("access_token");
+        if (userAfter) await AsyncStorage.removeItem("user");
+      }
     } catch (e) {
-      console.log("[SETTINGS] Logout request failed, clearing state anyway", e);
+      console.error("[SETTINGS] Logout request failed:", e);
     } finally {
-      console.log("[SETTINGS] Clearing auth state");
+      console.log("[SETTINGS] Clearing auth state via context");
 
-      // Xóa thông tin đăng nhập
-      clearAuth();
+      // Xóa thông tin đăng nhập thông qua context
+      await clearAuth();
 
-      console.log("[SETTINGS] Logout process completed");
+      // Kiểm tra lại sau khi đăng xuất
+      const tokenFinal = await AsyncStorage.getItem("access_token");
+      const userFinal = await AsyncStorage.getItem("user");
+      console.log("[SETTINGS] Final AsyncStorage check:", {
+        tokenExists: !!tokenFinal,
+        userExists: !!userFinal,
+      });
+
+      // Hiển thị thông báo đăng xuất thành công
+      Alert.alert("Đăng xuất thành công", "Bạn đã đăng xuất khỏi tài khoản", [
+        { text: "OK" },
+      ]);
+
+      // Chuyển hướng về trang chủ
+      router.replace("/(tabs)/home");
     }
   };
 
-  return (
-    <ScrollView style={styles.container}>
+  // Component hiển thị khi chưa đăng nhập
+  const LoginPromptView = () => (
+    <View style={styles.loginContainer}>
+      <Ionicons name="lock-closed-outline" size={64} color="#ccc" />
+      <Text style={styles.loginTitle}>Vui lòng đăng nhập</Text>
+      <Text style={styles.loginDescription}>
+        Bạn cần đăng nhập để xem và thay đổi cài đặt tài khoản
+      </Text>
+      <TouchableOpacity
+        style={styles.loginButton}
+        onPress={() => router.push("/(tabs)/profile")}
+      >
+        <Text style={styles.loginButtonText}>Đăng nhập</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Component hiển thị khi đã đăng nhập
+  const SettingsView = () => (
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+    >
       <Text style={styles.pageTitle}>Cài đặt</Text>
 
       {/* Cài đặt tài khoản */}
@@ -139,6 +227,28 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      {/* Thông tin tài khoản */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Thông tin tài khoản</Text>
+
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>Email</Text>
+          <Text style={styles.infoValue}>
+            {userData?.email || "Chưa cập nhật"}
+          </Text>
+        </View>
+
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>ID người dùng</Text>
+          <Text style={styles.infoValue}>{userId || "Không có"}</Text>
+        </View>
+
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>Vai trò</Text>
+          <Text style={styles.infoValue}>{userData?.role || "Người dùng"}</Text>
+        </View>
+      </View>
+
       {/* Khu vực nguy hiểm */}
       <View style={styles.dangerSection}>
         <Text style={styles.dangerTitle}>Khu vực nguy hiểm</Text>
@@ -157,6 +267,9 @@ export default function SettingsScreen() {
       </View>
     </ScrollView>
   );
+
+  // Render theo trạng thái đăng nhập
+  return isLoggedIn ? <SettingsView /> : <LoginPromptView />;
 }
 
 const styles = StyleSheet.create({
@@ -164,6 +277,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f6f8fb",
     padding: 16,
+  },
+  contentContainer: {
+    paddingBottom: Platform.OS === "ios" ? 100 : 80, // Add padding to bottom to prevent TabBar overlap
   },
   pageTitle: {
     fontSize: 26,
@@ -233,7 +349,7 @@ const styles = StyleSheet.create({
   dangerTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#e53935",
+    color: "#dc2626",
     marginBottom: 16,
   },
   dangerItem: {
@@ -241,21 +357,69 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
   },
   dangerItemTitle: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#23232b",
+    color: "#dc2626",
     marginBottom: 4,
   },
   dangerButton: {
-    backgroundColor: "#ffebee",
+    backgroundColor: "#dc2626",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
   },
   dangerButtonText: {
-    color: "#e53935",
+    color: "#fff",
     fontWeight: "500",
+  },
+  loginContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  loginTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#23232b",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  loginDescription: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  loginButton: {
+    backgroundColor: "#465fff",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  loginButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  infoItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: "#888",
+    marginBottom: 4,
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#23232b",
   },
 });

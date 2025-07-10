@@ -194,7 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const clearAuth = () => {
+  const clearAuth = async () => {
     console.log("[AUTH] Clearing auth");
 
     // Xóa state trong bộ nhớ
@@ -225,18 +225,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     } else {
       // Xóa khỏi AsyncStorage cho mobile
-      const clearFromAsyncStorage = async () => {
-        try {
-          console.log("[AUTH] Clearing auth data from AsyncStorage");
-          await AsyncStorage.removeItem("access_token");
-          await AsyncStorage.removeItem("user");
-          console.log("[AUTH] Cleared from AsyncStorage successfully");
-        } catch (e) {
-          console.error("[AUTH] Error clearing AsyncStorage:", e);
-        }
-      };
+      try {
+        console.log("[AUTH] Clearing auth data from AsyncStorage");
 
-      clearFromAsyncStorage();
+        // Sử dụng Promise.all để đảm bảo cả hai thao tác xóa hoàn thành
+        await Promise.all([
+          AsyncStorage.removeItem("access_token"),
+          AsyncStorage.removeItem("user"),
+        ]);
+
+        // Kiểm tra lại sau khi xóa để đảm bảo dữ liệu đã được xóa
+        const tokenCheck = await AsyncStorage.getItem("access_token");
+        const userCheck = await AsyncStorage.getItem("user");
+
+        console.log("[AUTH] AsyncStorage clear verification:", {
+          tokenExists: !!tokenCheck,
+          userExists: !!userCheck,
+        });
+
+        if (tokenCheck || userCheck) {
+          console.warn(
+            "[AUTH] Some data still exists in AsyncStorage after clearing"
+          );
+
+          // Thử xóa lại nếu vẫn còn dữ liệu
+          if (tokenCheck) {
+            console.log("[AUTH] Attempting to clear token again");
+            await AsyncStorage.removeItem("access_token");
+          }
+          if (userCheck) {
+            console.log("[AUTH] Attempting to clear user data again");
+            await AsyncStorage.removeItem("user");
+          }
+
+          // Kiểm tra lại lần nữa
+          const tokenCheckAgain = await AsyncStorage.getItem("access_token");
+          const userCheckAgain = await AsyncStorage.getItem("user");
+
+          console.log("[AUTH] AsyncStorage second clear verification:", {
+            tokenExists: !!tokenCheckAgain,
+            userExists: !!userCheckAgain,
+          });
+
+          // Nếu vẫn còn dữ liệu, thử phương pháp xóa khác
+          if (tokenCheckAgain || userCheckAgain) {
+            console.warn(
+              "[AUTH] Still having issues clearing AsyncStorage, trying alternative method"
+            );
+
+            // Thử phương pháp multiRemove
+            const keysToRemove = ["access_token", "user"];
+            await AsyncStorage.multiRemove(keysToRemove);
+
+            console.log("[AUTH] Used multiRemove as fallback");
+          }
+        } else {
+          console.log("[AUTH] Cleared from AsyncStorage successfully");
+        }
+      } catch (e) {
+        console.error("[AUTH] Error clearing AsyncStorage:", e);
+      }
     }
   };
 

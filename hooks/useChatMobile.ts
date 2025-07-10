@@ -39,8 +39,17 @@ const createFakeMongoId = (userId) => {
   let fakeId = '';
   const source = userId.toString();
   
+  // Sử dụng hashed approach để tạo ID ổn định hơn
+  let sum = 0;
+  for (let i = 0; i < source.length; i++) {
+    sum += source.charCodeAt(i);
+  }
+  
+  // Thêm prefix cố định để đảm bảo tính nhất quán
+  fakeId = '5f' + sum.toString(16).padStart(6, '0');
+  
   // Lấy mã ASCII của mỗi ký tự và chuyển thành hex
-  for (let i = 0; i < source.length && fakeId.length < 24; i++) {
+  for (let i = 0; i < source.length && fakeId.length < 20; i++) {
     const charCode = source.charCodeAt(i).toString(16);
     fakeId += charCode;
   }
@@ -374,7 +383,7 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
           targetId = userData.userObjectId;
           console.log("[MOBILE] Got valid userObjectId from API:", targetId);
         } else {
-          console.error("[MOBILE] Could not get valid userObjectId from API");
+          console.log("[MOBILE] Could not get valid userObjectId from API, using userId instead");
           
           // Thử tạo ID giả từ userId
           if (userId) {
@@ -407,11 +416,19 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
       // Gọi API với MongoDB ObjectId hợp lệ
       console.log("[MOBILE] Fetching sessions with ObjectId:", targetId);
       
+      // Thêm tham số để đảm bảo API biết đây là một ObjectId tạo từ user_id
+      const queryParams = new URLSearchParams({ 
+        useAsFallback: 'true', 
+        isUserIdString: 'true' 
+      }).toString();
+      
       // Đảm bảo URL API đúng định dạng, bỏ dấu / trùng lặp nếu có
-      let apiUrl = `${API_BASE_URL}/chatsession/user/${targetId}`;
+      let apiUrl = `${API_BASE_URL}/chatsession/user/${targetId}?${queryParams}`;
       apiUrl = apiUrl.replace(/([^:]\/)\/+/g, "$1");
       console.log("[MOBILE] Final API URL:", apiUrl);
       
+      // Xử lý trường hợp không có dữ liệu trả về
+      try {
       const res = await fetch(apiUrl, {
         method: 'GET',
         headers: {
@@ -421,6 +438,16 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
       });
       
       if (!res.ok) {
+          // Thử phương án fallback - tạo session mới nếu không lấy được danh sách
+          console.log("[MOBILE] Failed to load sessions, attempting to create a new session instead");
+          setSessions([]);
+          
+          if (res.status === 500 && userId) {
+            console.log("[MOBILE] Server error occurred, likely due to invalid ObjectId");
+            // Không ném lỗi, nhưng đặt sessions thành mảng rỗng
+            return;
+          }
+          
         // Xử lý lỗi HTTP
         const errorStatus = res.status;
         let errorText = '';
@@ -437,6 +464,12 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
       
       // Parse JSON response
       const responseText = await res.text();
+        if (!responseText.trim()) {
+          console.log("[MOBILE] Empty response from server, returning empty sessions array");
+          setSessions([]);
+          return;
+        }
+        
       console.log("[MOBILE] Raw API response:", responseText);
       
       let data;
@@ -450,11 +483,12 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
       console.log("[MOBILE] Parsed sessions data:", data);
       
       // Kiểm tra cấu trúc phản hồi
-      const sessions = data.data ? data.data : data;
+        const sessions = data.data ? data.data : Array.isArray(data) ? data : [];
       
       if (!Array.isArray(sessions)) {
         console.error("[MOBILE] Sessions data is not an array:", sessions);
-        throw new Error("Invalid sessions data format");
+          setSessions([]);
+          return;
       }
       
       console.log("[MOBILE] Final sessions:", sessions);
@@ -462,6 +496,11 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
     } catch (e) {
       setError("Không lấy được danh sách chat");
       console.error("[MOBILE] Error loading sessions:", e);
+        setSessions([]);
+      }
+    } catch (e) {
+      setError("Không lấy được danh sách chat");
+      console.error("[MOBILE] Error in load sessions outer try-catch:", e);
       setSessions([]);
     } finally {
       setIsLoading(false);
@@ -576,10 +615,13 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
     try {
       console.log("[MOBILE] Creating session with userId:", targetId, "isMongoId:", isMongoId);
       
-      // Chuẩn bị dữ liệu gửi đi tùy thuộc vào loại ID
-      const requestData = isMongoId 
-        ? { userId: targetId }
-        : { userId: targetId, isUserIdString: true };
+      // Chuẩn bị dữ liệu gửi đi với thêm field mới
+      const requestData = {
+        userId: targetId,
+        isUserIdString: !isMongoId,
+        useAsFallback: true,
+        originalUserId: userId || null
+      };
       
       const res = await fetch(`${API_BASE_URL}/chatsession/create`, {
         method: "POST",
@@ -595,6 +637,65 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
       
       // Kiểm tra status code
       if (!res.ok) {
+        // Thử phương án khác nếu có lỗi 500 (có thể do vấn đề ObjectId)
+        if (res.status === 500 && userId) {
+          console.log("[MOBILE] Server error 500, trying alternate approach");
+          
+          // Chuẩn bị dữ liệu với userId gốc thay vì ObjectId
+          const alternateRequestData = {
+            userId: userId,
+            isUserIdString: true,
+            useAsFallback: true,
+            bypassObjectId: true
+          };
+          
+          console.log("[MOBILE] Sending alternate request with original userId:", alternateRequestData);
+          
+          const alternateRes = await fetch(`${API_BASE_URL}/chatsession/create`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(alternateRequestData),
+          });
+          
+          if (!alternateRes.ok) {
+            let errorMessage = "Không tạo được session";
+            try {
+              const errorData = await alternateRes.json();
+              errorMessage = errorData.message || errorMessage;
+            } catch (e) {
+              console.error("[MOBILE] Error parsing alternate error response:", e);
+            }
+            throw new Error(errorMessage);
+          }
+          
+          // Xử lý alternate response thành công
+          try {
+            const alternateData = await alternateRes.json();
+            console.log('[MOBILE] API alternate response createSession:', alternateData);
+            
+            const newSession = alternateData.data || alternateData;
+            
+            console.log('[MOBILE] Extracted alternate session:', newSession);
+            
+            if (!newSession || !newSession.sessionId) {
+              throw new Error("Thiếu thông tin session trong phản hồi");
+            }
+            
+            return {
+              sessionId: newSession.sessionId,
+              status: newSession.status || 'active',
+              createdAt: newSession.createdAt || new Date().toISOString(),
+            };
+          } catch (e) {
+            console.error('[MOBILE] Error processing alternate response:', e);
+            throw new Error("Lỗi xử lý dữ liệu phản hồi");
+          }
+        }
+        
+        // Xử lý lỗi thông thường
         let errorMessage = "Không tạo được session";
         try {
           const errorData = await res.json();
@@ -629,255 +730,196 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
         throw new Error("Thiếu sessionId trong phản hồi");
       }
       
-      console.log('[MOBILE] New session created successfully:', newSession);
-      setCurrentSession(newSession);
-      setMessages([]);
-      await loadSessions();
-      return newSession;
+      return {
+        sessionId: newSession.sessionId,
+        status: newSession.status || 'active',
+        createdAt: newSession.createdAt || new Date().toISOString(),
+      };
     } catch (e) {
-      const errorMessage = e.message || "Không tạo được session chat";
-      setError(errorMessage);
-      console.error('[MOBILE] Error creating session:', e);
+      console.error("[MOBILE] Error creating session:", e);
+      setError(e.message || "Không tạo được session chat");
       return null;
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken, userObjectId, userId, loadSessions, fetchUserData]);
+  }, [accessToken, userObjectId, userId, fetchUserData]);
 
   // Gửi tin nhắn
-  const sendMessage = useCallback(async (message) => {
-    if (!message.trim() || !accessToken) {
-      setError("Bạn cần đăng nhập để gửi tin nhắn");
-      return;
-    }
-    
-    // Xác định user_id để gửi tin nhắn
-    let targetId = null;
-    let isMongoId = false;
-    
-    // Kiểm tra và sử dụng MongoDB ObjectId hợp lệ
-    if (userObjectId && /^[0-9a-fA-F]{24}$/.test(userObjectId)) {
-      targetId = userObjectId;
-      isMongoId = true;
-    } else {
-      console.log("[MOBILE] Invalid userObjectId format for sending message");
-      const userData = await fetchUserData();
-      if (userData?.userObjectId && /^[0-9a-fA-F]{24}$/.test(userData.userObjectId)) {
-        targetId = userData.userObjectId;
-        isMongoId = true;
-      } else if (userData?.userId) {
-        // Sử dụng userId thông thường nếu không có MongoDB ObjectId
-        targetId = userData.userId;
-        isMongoId = false;
-      } else if (userId) {
-        // Sử dụng userId từ context nếu có
-        targetId = userId;
-        isMongoId = false;
-      }
-    }
-    
-    if (!targetId) {
-      console.log("[MOBILE] No valid user ID found for sending message");
-      setError("Không tìm thấy thông tin người dùng hợp lệ");
-      return;
-    }
+  const sendMessage = useCallback(
+    async (message) => {
+      // Validate và clean message
+      const cleanedMessage = message?.trim() ?? "";
+      if (!cleanedMessage) return;
+
+      // Không gửi tin nhắn nếu đang gửi rồi
+      if (isSending) return;
     
     setIsSending(true);
     setError("");
 
-    // ID tạm thời cho tin nhắn
-    const tempUserMessageId = Date.now().toString();
-    
-    // Add user message ngay lập tức
-    setMessages((prev) => [
-      ...prev,
-      { 
+      // Thêm tin nhắn từ người dùng ngay lập tức (optimistic UI)
+      const tempUserMsgId = `temp_${Date.now()}`;
+      const userMessage = {
+        id: tempUserMsgId,
+        chat_message_id: tempUserMsgId,
+        content: cleanedMessage,
         sender: "user", 
-        content: message,
-        id: tempUserMessageId,
-        chat_message_id: `temp_${tempUserMessageId}`,
         timestamp: new Date().toISOString(),
-      },
-    ]);
-    
-    try {
-      // Gọi API chat
-      console.log("[MOBILE] Sending message:", {
-        question: message, 
-        sessionId: currentSession?.sessionId,
-        user_id: targetId,
-        isMongoId
-      });
-      
-      // Chuẩn bị dữ liệu gửi đi tùy thuộc vào loại ID
-      const requestData = isMongoId 
-        ? {
-            question: message,
-            sessionId: currentSession?.sessionId,
-            user_id: targetId
+      };
+      setMessages((prev) => [...prev, userMessage]);
+
+      // Biến để lưu session ID hiện tại hoặc mới
+      let effectiveSessionId = currentSession?.sessionId;
+
+      try {
+        console.log("[MOBILE] Sending message:", cleanedMessage, "with session:", effectiveSessionId);
+
+        // Nếu chưa có session, tạo mới trước
+        if (!effectiveSessionId) {
+          console.log("[MOBILE] No active session, creating new one first");
+          
+          const newSession = await createSession();
+          if (!newSession?.sessionId) {
+            throw new Error("Không thể tạo session mới");
           }
-        : {
-            question: message,
-            sessionId: currentSession?.sessionId,
-            user_id: targetId,
-            isUserIdString: true
-          };
-      
-      // Lưu trữ sessionId hiện tại để sử dụng trong trường hợp API không trả về sessionId
-      const currentSessionId = currentSession?.sessionId;
-      
-      const res = await fetch(`${API_BASE_URL}/app/ask`, {
+          
+          effectiveSessionId = newSession.sessionId;
+          setCurrentSession(newSession);
+          console.log("[MOBILE] Created new session:", effectiveSessionId);
+        }
+
+        // Thêm tin nhắn của user vào session
+        try {
+          await fetch(`${API_BASE_URL}/chatsession/${effectiveSessionId}/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify(requestData),
+            body: JSON.stringify({
+              sender: "user",
+              content: cleanedMessage,
+            }),
+          });
+          console.log("[MOBILE] User message added to session");
+        } catch (e) {
+          console.error("[MOBILE] Error adding user message:", e);
+          // Tiếp tục để vẫn gửi tới AI
+        }
+
+        // Gửi tin nhắn tới API AI
+        const aiResponse = await fetch(`${API_BASE_URL}/app/ask`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            question: cleanedMessage,
+            sessionId: effectiveSessionId,
+            userId: userId,
+          }),
       });
       
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Lỗi gửi tin nhắn");
+        // Xử lý lỗi HTTP
+        if (!aiResponse.ok) {
+          const errorStatus = aiResponse.status;
+          let errorMessage = `Lỗi ${errorStatus}`;
+          
+          try {
+            const errorData = await aiResponse.json();
+            errorMessage = errorData.message || errorMessage;
+          } catch (e) {
+            // Không làm gì nếu không parse được JSON
+          }
+          
+          throw new Error(errorMessage);
+        }
+
+        // Parse response
+        const responseText = await aiResponse.text();
+        console.log("[MOBILE] Raw AI response:", responseText);
+        
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (e) {
+          console.error("[MOBILE] Error parsing AI response:", e);
+          throw new Error("Định dạng phản hồi không hợp lệ");
       }
       
-      const responseData = await res.json();
-      console.log('[MOBILE] API response sendMessage:', responseData);
-      
-      // Kiểm tra phản hồi ở nhiều cấp khác nhau
-      let answer;
-      let sessionId;
-      
-      // Debug chi tiết cấu trúc response
-      console.log("[MOBILE] Response structure:", {
-        hasData: !!responseData.data,
-        hasAnswer: !!(responseData.answer || (responseData.data && responseData.data.answer)),
-        directAnswer: responseData.answer,
-        dataAnswer: responseData.data?.answer,
-        sessionId: responseData.sessionId || responseData.data?.sessionId,
-      });
-      
-      // Thứ tự ưu tiên: responseData.data.answer > responseData.answer > responseData.data
-      if (responseData.data && typeof responseData.data.answer === 'string') {
-        // Trường hợp: { data: { answer: "..." } }
-        answer = responseData.data.answer;
-        sessionId = responseData.data.sessionId;
-      } else if (typeof responseData.answer === 'string') {
-        // Trường hợp: { answer: "..." }
-        answer = responseData.answer;
-        sessionId = responseData.sessionId;
-      } else if (responseData.data && typeof responseData.data === 'string') {
-        // Trường hợp: { data: "..." }
-        answer = responseData.data;
-        // Tìm sessionId ở cấp cao nhất nếu có
-        sessionId = responseData.sessionId;
-      } else if (responseData.data && responseData.data.content) {
-        // Trường hợp: { data: { content: "..." } }
-        answer = responseData.data.content;
-        sessionId = responseData.data.sessionId;
-      } else if (responseData.content) {
-        // Trường hợp: { content: "..." }
-        answer = responseData.content;
-        sessionId = responseData.sessionId;
-      } else if (responseData.data && responseData.data.text) {
-        // Trường hợp khác
-        answer = responseData.data.text;
-        sessionId = responseData.data.sessionId;
-      } else if (responseData.text) {
-        // Trường hợp khác
-        answer = responseData.text;
-        sessionId = responseData.sessionId;
-      } else if (responseData.data && responseData.data.message) {
-        // Trường hợp khác
-        answer = responseData.data.message;
-        sessionId = responseData.data.sessionId;
-      } else if (responseData.message && typeof responseData.message === 'string') {
-        // Trường hợp khác
-        answer = responseData.message;
-        sessionId = responseData.sessionId;
-      }
-      
-      // Cuối cùng kiểm tra nếu tìm thấy câu trả lời
-      if (answer) {
-        // Kiểm tra và log tất cả các vị trí có thể chứa sessionId
-        const possibleSessionIds = {
-          directSessionId: responseData.sessionId,
-          dataSessionId: responseData.data?.sessionId,
-          currentSessionId: currentSession?.sessionId
+        // Xử lý cấu trúc response
+        const aiAnswer = data.answer || 
+                         (data.data && data.data.answer) || 
+                         "Xin lỗi, tôi không thể trả lời lúc này.";
+        
+        // Thêm tin nhắn từ AI vào state
+        const tempBotMsgId = `temp_${Date.now() + 1}`;
+        const botMessage = {
+          id: tempBotMsgId,
+          chat_message_id: tempBotMsgId,
+          content: aiAnswer,
+            sender: "bot", 
+            timestamp: new Date().toISOString(),
         };
         
-        console.log('[MOBILE] Possible sessionIds:', possibleSessionIds);
+        setMessages((prev) => [...prev, botMessage]);
+        console.log("[MOBILE] AI response added to messages state");
         
-        // Nếu không tìm thấy sessionId trong response, sử dụng sessionId hiện tại nếu có
-        if (!sessionId && currentSessionId) {
-          sessionId = currentSessionId;
-          console.log('[MOBILE] Using current sessionId:', sessionId);
-        }
-        
-        console.log('[MOBILE] Bot answer:', answer, 'sessionId:', sessionId || 'undefined (using current session)');
-        
-        // ID tạm thời cho tin nhắn bot
-        const tempBotMessageId = Date.now() + 1;
-        
-        setMessages((prev) => [
-          ...prev,
-          { 
-            sender: "bot", 
-            content: answer,
-            id: tempBotMessageId.toString(),
-            chat_message_id: `temp_${tempBotMessageId}`,
-            timestamp: new Date().toISOString(),
-            sessionId: sessionId || currentSessionId // Lưu sessionId vào tin nhắn
-          },
-        ]);
-        
-        // Nếu là session mới, cập nhật lại session
-        if (!currentSession && sessionId) {
-          console.log('[MOBILE] New session detected in response:', sessionId);
-          const session = { sessionId: sessionId, status: "active" };
-          setCurrentSession(session);
+        // Nếu session ID trả về khác với session ID hiện tại, cập nhật lại
+        const responseSessionId = data.sessionId || (data.data && data.data.sessionId);
+        if (responseSessionId && responseSessionId !== effectiveSessionId) {
+          console.log("[MOBILE] Updating session ID from response:", responseSessionId);
+          
+          // Cập nhật currentSession với sessionId mới
+          setCurrentSession({
+            sessionId: responseSessionId,
+            status: "active",
+          });
+          
+          // Cập nhật danh sách session
           await loadSessions();
         } 
-        // Nếu chưa có session và API không trả về sessionId, tạo session mới
-        else if (!currentSession && !sessionId) {
-          console.log('[MOBILE] No session found, creating new session...');
-          const newSession = await createSession();
-          if (newSession) {
-            console.log('[MOBILE] Created new session:', newSession.sessionId);
-          }
-        }
-      } else {
-        console.error('[MOBILE] Missing answer in response:', responseData);
-        throw new Error("Không nhận được phản hồi từ AI");
-      }
+        
+        return true;
     } catch (e) {
-      setError(e.message || "Lỗi gửi tin nhắn");
-      console.error('[MOBILE] Error sending message:', e);
+        console.error("[MOBILE] Error in sendMessage:", e);
       
-      // Xóa tin nhắn user nếu gặp lỗi
-      setMessages((prev) => prev.filter(msg => msg.id !== tempUserMessageId));
+        // Xóa tin nhắn optimistic UI nếu gặp lỗi
+        setMessages((prev) => prev.filter((msg) => msg.id !== tempUserMsgId));
+        
+        // Hiển thị thông báo lỗi
+        setError(e.message || "Không gửi được tin nhắn");
+        return false;
     } finally {
       setIsSending(false);
     }
-  }, [accessToken, userObjectId, userId, currentSession, loadSessions, fetchUserData, createSession]);
+    },
+    [accessToken, currentSession, userId, isSending, createSession, loadSessions]
+  );
 
   // Xóa tin nhắn hiện tại
   const clearMessages = useCallback(() => {
     setMessages([]);
   }, []);
 
+  // Return hook API
   return {
+    accessToken,
+    userId,
+    userObjectId,
     sessions,
     currentSession,
     messages,
     isLoading,
     isSending,
     error,
+    setError,
     loadSessions,
     selectSession,
     createSession,
     sendMessage,
-    clearMessages,
     setCurrentSession,
-    setError,
+    clearMessages
   };
 } 

@@ -1,6 +1,5 @@
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { BlurView } from 'expo-blur';
-import { StyleSheet } from 'react-native';
+import { BlurView } from "expo-blur";
+import { Platform, StyleSheet } from "react-native";
 
 export default function BlurTabBarBackground() {
   return (
@@ -15,5 +14,6 @@ export default function BlurTabBarBackground() {
 }
 
 export function useBottomTabOverflow() {
-  return useBottomTabBarHeight();
+  // Trả về chiều cao của tab bar để các component có thể điều chỉnh padding bottom
+  return Platform.OS === "ios" ? 80 : 60;
 }

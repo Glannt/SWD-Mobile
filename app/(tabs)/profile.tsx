@@ -1,8 +1,11 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Image,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -41,7 +44,12 @@ const getApiBaseUrl = () => {
 const API_BASE_URL = getApiBaseUrl();
 
 const editInfoStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 24 },
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    padding: 24,
+    paddingTop: Platform.OS === "android" ? 50 : 24, // Add more padding on Android
+  },
   backBtn: { padding: 4, borderRadius: 8, marginBottom: 16 },
   title: {
     fontSize: 18,
@@ -90,7 +98,12 @@ const editInfoStyles = StyleSheet.create({
 });
 
 const changePasswordStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 24 },
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    padding: 24,
+    paddingTop: Platform.OS === "android" ? 50 : 24, // Add more padding on Android
+  },
   backBtn: { padding: 4, borderRadius: 8, marginBottom: 16 },
   title: {
     fontSize: 18,
@@ -126,7 +139,12 @@ const changePasswordStyles = StyleSheet.create({
 });
 
 const forgotStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 24 },
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    padding: 24,
+    paddingTop: Platform.OS === "android" ? 70 : 50, // Add more padding on Android
+  },
   backBtn: { padding: 4, borderRadius: 8, marginBottom: 16 },
   title: {
     fontSize: 22,
@@ -161,7 +179,12 @@ const forgotStyles = StyleSheet.create({
 });
 
 const profileStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f6f8fb", padding: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: "#f6f8fb",
+    padding: 16,
+    paddingTop: Platform.OS === "android" ? 50 : 16, // Add more padding on Android
+  },
   pageTitle: {
     fontSize: 26,
     fontWeight: "bold",
@@ -199,6 +222,22 @@ const profileStyles = StyleSheet.create({
     flexShrink: 1,
     textAlign: "right",
   },
+  adminButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ff6600",
+    borderRadius: 12,
+    padding: 14,
+    marginHorizontal: 16,
+    marginBottom: 18,
+  },
+  adminButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+    marginLeft: 8,
+  },
 });
 
 export default function ProfileScreen() {
@@ -232,6 +271,21 @@ export default function ProfileScreen() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
   const { accessToken, userId, setAuth, clearAuth } = useAuth();
+  const router = useRouter();
+
+  // Kiểm tra trạng thái đăng nhập mỗi khi component được mount hoặc accessToken thay đổi
+  useEffect(() => {
+    console.log("[PROFILE] Checking auth state, accessToken:", !!accessToken);
+    if (accessToken) {
+      setIsLoggedIn(true);
+    } else {
+      setIsLoggedIn(false);
+      setProfile(null);
+      setShowOption(false);
+      setShowEditInfo(false);
+      setShowChangePassword(false);
+    }
+  }, [accessToken]);
 
   const handleLogin = async () => {
     setLoginLoading(true);
@@ -251,7 +305,7 @@ export default function ProfileScreen() {
         throw new Error(err.message || "Lỗi đăng nhập");
       }
       const data = await res.json();
-      console.log("[PROFILE] Login response:", data);
+      console.log("[PROFILE] Login response:", JSON.stringify(data, null, 2));
 
       // Phân tích cấu trúc data để lấy token và thông tin user
       const responseData = data.data || data;
@@ -278,6 +332,33 @@ export default function ProfileScreen() {
 
       // Log tất cả thông tin user để debug
       console.log("[PROFILE] User data:", JSON.stringify(userData, null, 2));
+
+      // Kiểm tra và log thông tin về role
+      console.log("[PROFILE] Checking for role information:");
+      if (userData.role) {
+        console.log(
+          "[PROFILE] Found role directly in userData:",
+          userData.role
+        );
+      } else if (userData.roles) {
+        console.log("[PROFILE] Found roles array in userData:", userData.roles);
+      } else if (userData.userRole) {
+        console.log("[PROFILE] Found userRole in userData:", userData.userRole);
+      } else if (userData.user_role) {
+        console.log(
+          "[PROFILE] Found user_role in userData:",
+          userData.user_role
+        );
+      } else if (responseData.role) {
+        console.log("[PROFILE] Found role in responseData:", responseData.role);
+      } else if (responseData.roles) {
+        console.log(
+          "[PROFILE] Found roles in responseData:",
+          responseData.roles
+        );
+      } else {
+        console.log("[PROFILE] No role information found in response");
+      }
 
       // Lấy các ID cần thiết - xử lý nhiều trường hợp có thể
       const userId = userData.user_id || userData.userId || "";
@@ -360,10 +441,56 @@ export default function ProfileScreen() {
         return;
       }
       const data = await res.json();
-      const userId = data.data?.user?.user_id;
-      const userObjectId = data.data?.user?._id;
-      const accessToken = data.data?.accessToken;
-      console.log("[MOBILE REGISTER] data:", data);
+      console.log(
+        "[MOBILE REGISTER] Complete data response:",
+        JSON.stringify(data, null, 2)
+      );
+
+      // Lấy các trường cần thiết từ phản hồi
+      const responseData = data.data || data;
+      const userData = responseData.user || responseData;
+
+      const userId = userData.user_id || userData.userId || "";
+      const userObjectId = userData._id || "";
+      const accessToken =
+        responseData.accessToken || responseData.access_token || "";
+
+      // Kiểm tra thông tin role trong phản hồi
+      console.log("[MOBILE REGISTER] Checking for role information:");
+      if (userData.role) {
+        console.log(
+          "[MOBILE REGISTER] Found role directly in userData:",
+          userData.role
+        );
+      } else if (userData.roles) {
+        console.log(
+          "[MOBILE REGISTER] Found roles array in userData:",
+          userData.roles
+        );
+      } else if (userData.userRole) {
+        console.log(
+          "[MOBILE REGISTER] Found userRole in userData:",
+          userData.userRole
+        );
+      } else if (userData.user_role) {
+        console.log(
+          "[MOBILE REGISTER] Found user_role in userData:",
+          userData.user_role
+        );
+      } else if (responseData.role) {
+        console.log(
+          "[MOBILE REGISTER] Found role in responseData:",
+          responseData.role
+        );
+      } else if (responseData.roles) {
+        console.log(
+          "[MOBILE REGISTER] Found roles in responseData:",
+          responseData.roles
+        );
+      } else {
+        console.log("[MOBILE REGISTER] No role information found in response");
+      }
+
       console.log(
         "[MOBILE REGISTER] userId:",
         userId,
@@ -372,11 +499,13 @@ export default function ProfileScreen() {
         "accessToken:",
         accessToken
       );
+
       setIsLoggedIn(true);
-      setAuth(accessToken || "", userId || "", userObjectId || "");
+      setAuth(accessToken || "", userId || "", userObjectId || "", userData);
 
       setRegisterLoading(false);
     } catch (e) {
+      console.error("[MOBILE REGISTER] Error:", e);
       setRegisterError("Lỗi kết nối server");
       setRegisterLoading(false);
     }
@@ -384,16 +513,50 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
+      console.log("[PROFILE] Starting logout process");
+
+      if (accessToken) {
+        console.log("[PROFILE] Calling logout API");
+        await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+      } else {
+        console.log("[PROFILE] No access token, skipping API call");
+      }
+
+      console.log("[PROFILE] Clearing AsyncStorage directly");
+      // Xóa dữ liệu trực tiếp từ AsyncStorage
+      const keysToRemove = ["access_token", "user"];
+      await AsyncStorage.multiRemove(keysToRemove);
+
+      // Kiểm tra xem đã xóa thành công chưa
+      const tokenAfter = await AsyncStorage.getItem("access_token");
+      const userAfter = await AsyncStorage.getItem("user");
+      console.log("[PROFILE] AsyncStorage after direct clear:", {
+        tokenExists: !!tokenAfter,
+        userExists: !!userAfter,
       });
+
+      // Nếu vẫn còn dữ liệu, thử xóa lại từng item
+      if (tokenAfter || userAfter) {
+        console.log(
+          "[PROFILE] Some data still exists, trying individual removal"
+        );
+        if (tokenAfter) await AsyncStorage.removeItem("access_token");
+        if (userAfter) await AsyncStorage.removeItem("user");
+      }
     } catch (e) {
-      console.log("Logout request failed, clearing state anyway", e);
+      console.log("[PROFILE] Logout request failed, clearing state anyway", e);
     } finally {
+      // Xóa thông tin đăng nhập thông qua context
+      console.log("[PROFILE] Clearing auth context");
+      await clearAuth();
+
+      // Reset tất cả state trong component
       setIsLoggedIn(false);
       setProfile(null);
       setEmail("");
@@ -404,7 +567,22 @@ export default function ProfileScreen() {
       setShowChangePassword(false);
       setShowRegister(false);
       setShowForgot(false);
-      clearAuth();
+
+      // Kiểm tra lại sau khi đăng xuất
+      const tokenFinal = await AsyncStorage.getItem("access_token");
+      const userFinal = await AsyncStorage.getItem("user");
+      console.log("[PROFILE] Final AsyncStorage check:", {
+        tokenExists: !!tokenFinal,
+        userExists: !!userFinal,
+      });
+
+      // Đảm bảo người dùng được chuyển về trang profile sau khi đăng xuất
+      try {
+        console.log("[PROFILE] Redirecting after logout");
+        router.navigate("/(tabs)/profile");
+      } catch (e) {
+        console.error("[PROFILE] Error redirecting after logout:", e);
+      }
     }
   };
 
@@ -626,12 +804,6 @@ export default function ProfileScreen() {
     // Trang Đăng ký
     return (
       <View style={loginStyles.container}>
-        <TouchableOpacity
-          style={loginStyles.backBtn}
-          onPress={() => setShowRegister(false)}
-        >
-          <Ionicons name="arrow-back" size={24} color="#222" />
-        </TouchableOpacity>
         <Text style={loginStyles.title}>Tạo tài khoản</Text>
         <View style={loginStyles.inputWrap}>
           <Ionicons
@@ -722,7 +894,9 @@ export default function ProfileScreen() {
         <View style={loginStyles.registerRow}>
           <Text style={loginStyles.registerLabel}>Bạn đã có tài khoản? </Text>
           <TouchableOpacity onPress={() => setShowRegister(false)}>
-            <Text style={loginStyles.registerText}>Đăng Nhập</Text>
+            <Text style={[loginStyles.registerText, { fontWeight: "700" }]}>
+              Đăng Nhập
+            </Text>
           </TouchableOpacity>
         </View>
         <View style={loginStyles.dividerWrap}>
@@ -740,12 +914,6 @@ export default function ProfileScreen() {
   if (!isLoggedIn && showForgot) {
     return (
       <View style={forgotStyles.container}>
-        <TouchableOpacity
-          style={forgotStyles.backBtn}
-          onPress={() => setShowForgot(false)}
-        >
-          <Ionicons name="arrow-back" size={24} color="#222" />
-        </TouchableOpacity>
         <Text style={forgotStyles.title}>Quên mật khẩu</Text>
         <Text style={forgotStyles.desc}>
           Chọn thông tin liên hệ mà chúng tôi sẽ sử dụng để đặt lại mật khẩu của
@@ -768,6 +936,16 @@ export default function ProfileScreen() {
         <TouchableOpacity style={forgotStyles.nextBtn}>
           <Text style={forgotStyles.nextBtnText}>Next</Text>
         </TouchableOpacity>
+
+        {/* Added back navigation option */}
+        <TouchableOpacity
+          style={{ marginTop: 16, alignSelf: "center" }}
+          onPress={() => setShowForgot(false)}
+        >
+          <Text style={{ color: "#23232b", fontWeight: "700" }}>
+            Quay lại đăng nhập
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -776,9 +954,6 @@ export default function ProfileScreen() {
     // Trang Đăng nhập
     return (
       <View style={loginStyles.container}>
-        <TouchableOpacity style={loginStyles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#222" />
-        </TouchableOpacity>
         <Text style={loginStyles.title}>Đăng nhập</Text>
         <View style={loginStyles.inputWrap}>
           <Ionicons
@@ -882,8 +1057,23 @@ export default function ProfileScreen() {
     // Dữ liệu thực tế từ API
     const user = profile as any;
     return (
-      <View style={profileStyles.container}>
-        <Text style={profileStyles.pageTitle}>Hồ sơ cá nhân</Text>
+      <ScrollView style={profileStyles.container}>
+        <Text style={profileStyles.pageTitle}>Thông tin tài khoản</Text>
+
+        {/* Admin dashboard button - only for admin users */}
+        {user.role === "admin" && (
+          <TouchableOpacity
+            style={profileStyles.adminButton}
+            onPress={() => router.push("/(tabs)/dashboard")}
+          >
+            <Ionicons name="analytics-outline" size={24} color="#fff" />
+            <Text style={profileStyles.adminButtonText}>
+              Truy cập trang quản trị
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Thông tin cá nhân */}
         <View style={profileStyles.box}>
           <Text style={profileStyles.boxTitle}>Thông tin cơ bản</Text>
           <View style={profileStyles.row}>
@@ -966,7 +1156,7 @@ export default function ProfileScreen() {
             Đăng xuất
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -1042,10 +1232,7 @@ export default function ProfileScreen() {
           style={{ marginLeft: "auto" }}
         />
       </View>
-      <TouchableOpacity
-        style={styles.optionRow}
-        onPress={() => setIsLoggedIn(false)}
-      >
+      <TouchableOpacity style={styles.optionRow} onPress={handleLogout}>
         <MaterialIcons
           name="logout"
           size={24}
@@ -1059,7 +1246,12 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 24 },
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    padding: 24,
+    paddingTop: Platform.OS === "android" ? 50 : 24, // Add more padding on Android
+  },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1115,15 +1307,8 @@ const loginStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     paddingHorizontal: 24,
-    paddingTop: 32,
+    paddingTop: Platform.OS === "android" ? 70 : 50,
     alignItems: "center",
-  },
-  backBtn: {
-    alignSelf: "flex-start",
-    marginBottom: 12,
-    backgroundColor: "#f6f8fb",
-    borderRadius: 16,
-    padding: 6,
   },
   title: {
     fontSize: 32,
@@ -1220,7 +1405,12 @@ const loginStyles = StyleSheet.create({
 });
 
 const optionStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 24 },
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    padding: 24,
+    paddingTop: Platform.OS === "android" ? 50 : 24, // Add more padding on Android
+  },
   backBtn: { padding: 4, borderRadius: 8, marginBottom: 16 },
   title: {
     fontSize: 22,

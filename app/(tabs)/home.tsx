@@ -6,6 +6,7 @@ import {
   Dimensions,
   Image,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +14,9 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../AuthContext";
+
+// Tính toán chiều cao của TabBar để đảm bảo padding đúng
+const TAB_BAR_HEIGHT = Platform.OS === "ios" ? 80 : 60;
 
 export default function HomeScreen() {
   const { accessToken, userData } = useAuth();
@@ -127,7 +131,10 @@ export default function HomeScreen() {
   ];
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+    >
       <StatusBar style="light" />
 
       {/* Banner tuyển sinh - cập nhật để giống website */}
@@ -518,7 +525,10 @@ const { width } = Dimensions.get("window");
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#fff",
+  },
+  contentContainer: {
+    paddingBottom: TAB_BAR_HEIGHT + 20, // Thêm padding để tránh bị che bởi TabBar
   },
   // Banner section - cập nhật để giống website
   bannerSectionWrapper: {

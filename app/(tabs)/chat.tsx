@@ -56,7 +56,8 @@ const LoadingBubble = () => {
   );
 };
 
-// Hàm getApiBaseUrl được import từ utils/api.js
+// Tính toán chiều cao của TabBar để đảm bảo padding đúng
+const TAB_BAR_HEIGHT = Platform.OS === "ios" ? 80 : 60;
 
 export default function ChatScreen() {
   const { accessToken, userId } = useAuth();
@@ -233,21 +234,32 @@ export default function ChatScreen() {
         return;
       }
 
+      // Đặt session hiện tại là session mới
+      chat.setCurrentSession(newSession);
+
+      // Xóa tin nhắn hiện tại để bắt đầu cuộc hội thoại mới
+      chat.clearMessages();
+
       console.log("[MOBILE] Chat mới đã được tạo:", newSession);
       console.log("[MOBILE] SessionID của chat mới:", newSession.sessionId);
       setInput("");
 
+      // Tải lại danh sách session sau khi tạo mới
+      await chat.loadSessions();
+
       // Thiết lập lại hệ thống theo dõi kết nối
       startConnectionMonitoring();
-      setConnectionError(false);
     } catch (error) {
-      console.error("[MOBILE] Lỗi khi tạo chat mới:", error);
+      console.error("[MOBILE] Error creating new chat:", error);
+      Alert.alert(
+        "Lỗi",
+        "Không thể tạo cuộc trò chuyện mới. Vui lòng thử lại sau."
+      );
     } finally {
       setCreatingNewChat(false);
     }
   };
 
-  // Gửi tin nhắn
   const handleSend = async () => {
     if (!input.trim() || chat.isSending) return;
 
@@ -298,16 +310,6 @@ export default function ChatScreen() {
   if (!isLoggedIn) {
     return (
       <View style={chatStyles.welcomeScreen}>
-        <TouchableOpacity
-          style={chatStyles.backButton}
-          onPress={() => {
-            // Quay lại trang chính (home)
-            router.push("/(tabs)/home");
-          }}
-        >
-          <Ionicons name="chevron-back" size={24} color="#000" />
-        </TouchableOpacity>
-
         <View style={chatStyles.welcomeContainer}>
           <View style={chatStyles.logoContainer}>
             <Image
@@ -489,7 +491,10 @@ export default function ChatScreen() {
                 </View>
               </View>
             )}
-            contentContainerStyle={{ paddingVertical: 16 }}
+            contentContainerStyle={{
+              paddingVertical: 16,
+              paddingBottom: TAB_BAR_HEIGHT + 60, // Thêm padding để tránh bị che bởi input và TabBar
+            }}
             onContentSizeChange={() =>
               flatListRef.current?.scrollToEnd({ animated: true })
             }
@@ -501,7 +506,8 @@ export default function ChatScreen() {
       {/* Ô nhập tin nhắn */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={80}
+        keyboardVerticalOffset={TAB_BAR_HEIGHT}
+        style={chatStyles.keyboardAvoidingView}
       >
         <View style={chatStyles.inputRow}>
           <TextInput
@@ -539,7 +545,11 @@ export default function ChatScreen() {
 }
 
 const chatStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f6f8fb" },
+  container: {
+    flex: 1,
+    backgroundColor: "#f6f8fb",
+    paddingBottom: TAB_BAR_HEIGHT, // Thêm padding bottom để tránh bị che bởi TabBar
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -683,12 +693,20 @@ const chatStyles = StyleSheet.create({
   },
   msgText: { color: "#23232b", fontSize: 15 },
   userMsgText: { color: "#fff" },
+  keyboardAvoidingView: {
+    width: "100%",
+    position: "absolute",
+    bottom: TAB_BAR_HEIGHT, // Đặt vị trí trên TabBar
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+  },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -726,13 +744,6 @@ const chatStyles = StyleSheet.create({
   welcomeScreen: {
     flex: 1,
     backgroundColor: "#fff",
-  },
-  backButton: {
-    position: "absolute",
-    top: 40,
-    left: 20,
-    padding: 10,
-    zIndex: 10,
   },
   welcomeContainer: {
     flex: 1,
