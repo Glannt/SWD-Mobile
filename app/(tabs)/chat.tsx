@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import NotificationBell from "../../components/NotificationBell";
 import { useChatMobile } from "../../hooks/useChatMobile";
 import { getApiBaseUrl } from "../../utils/api";
 import { useAuth } from "../AuthContext";
@@ -367,6 +368,7 @@ export default function ChatScreen() {
             </>
           )}
         </TouchableOpacity>
+        <NotificationBell />
       </View>
 
       {/* Hiển thị thông báo mất kết nối */}

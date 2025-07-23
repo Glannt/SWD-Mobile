@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "321128844526",
+    "project_id": "swd392-5c9d5",
+    "storage_bucket": "swd392-5c9d5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:321128844526:android:35428250bc97c054a9b7ff",
+        "android_client_info": {
+          "package_name": "com.anonymous.SWDMobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "321128844526-9j0s82f1ukhlu1ja949ckih117dlfgk5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAoE8WK6egxKO5jCUJ7Q3_8Dn0ASfoA218"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "321128844526-9j0s82f1ukhlu1ja949ckih117dlfgk5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

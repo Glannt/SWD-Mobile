@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Platform,
@@ -12,7 +12,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { NotificationPermissionModal } from "../../components/NotificationPermissionModal";
+import { checkNotificationPermission } from "../../services/firebase-messaging";
 import { useAuth } from "../AuthContext";
+import { useNotification } from "../NotificationContext";
 
 // Chọn URL API phù hợp với môi trường
 const getApiBaseUrl = () => {
@@ -29,10 +32,10 @@ const getApiBaseUrl = () => {
     } else if (Platform.OS === "ios") {
       // Trên iOS, sử dụng địa chỉ IP thay vì localhost
       // TODO: Thay thế bằng địa chỉ IP của máy chủ thực tế hoặc domain
-      return "http://192.168.1.8:3000/api/v1"; // Thay đổi IP này
+      return "http://192.168.1.6:3000/api/v1"; // Thay đổi IP này
     } else if (Platform.OS === "android") {
       // Trên Android có thể sử dụng 10.0.2.2 để trỏ đến localhost của máy chủ
-      return "http://10.0.2.2:3000/api/v1";
+      return "http://192.168.1.6:3000/api/v1";
     }
   } catch (e) {
     console.error("[MOBILE] Error getting API base URL:", e);
@@ -47,10 +50,25 @@ export default function SettingsScreen() {
   const { accessToken, userId, userData, clearAuth } = useAuth();
   const [twoFactorEnabled, setTwoFactorEnabled] = React.useState(false);
   const [emailNotifications, setEmailNotifications] = React.useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
   const router = useRouter();
+  const { setupUserNotifications } = useNotification();
 
   // Kiểm tra đăng nhập
   const isLoggedIn = !!accessToken;
+
+  // Kiểm tra trạng thái quyền thông báo khi component mount
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (isLoggedIn) {
+        const hasPermission = await checkNotificationPermission();
+        setNotificationsEnabled(hasPermission);
+      }
+    };
+
+    checkPermissions();
+  }, [isLoggedIn]);
 
   // Debug: Kiểm tra dữ liệu trong AsyncStorage khi component mount
   useEffect(() => {
@@ -70,6 +88,29 @@ export default function SettingsScreen() {
 
     checkAsyncStorage();
   }, []);
+
+  // Xử lý toggle thông báo
+  const handleToggleNotifications = () => {
+    if (!notificationsEnabled) {
+      // Nếu chưa bật, hiển thị modal xin quyền
+      setShowPermissionModal(true);
+    } else {
+      // Nếu đang bật, hiển thị hướng dẫn tắt thông báo
+      Alert.alert(
+        "Tắt thông báo",
+        "Để tắt thông báo, vui lòng vào cài đặt thiết bị và tắt thông báo cho ứng dụng này.",
+        [{ text: "OK" }]
+      );
+    }
+  };
+
+  // Xử lý sau khi đăng ký thông báo thành công
+  const handleNotificationSuccess = () => {
+    setNotificationsEnabled(true);
+    Alert.alert("Thành công", "Bạn đã đăng ký nhận thông báo thành công!", [
+      { text: "OK" },
+    ]);
+  };
 
   // Xử lý đăng xuất
   const handleLogout = async () => {
@@ -168,6 +209,39 @@ export default function SettingsScreen() {
     >
       <Text style={styles.pageTitle}>Cài đặt</Text>
 
+      {/* Cài đặt thông báo */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Cài đặt thông báo</Text>
+
+        <View style={styles.settingItem}>
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingTitle}>Thông báo đẩy</Text>
+            <Text style={styles.settingDesc}>
+              Nhận thông báo trực tiếp trên thiết bị
+            </Text>
+          </View>
+          <Switch
+            value={notificationsEnabled}
+            onValueChange={handleToggleNotifications}
+            trackColor={{ false: "#e5e7eb", true: "#ff6600" }}
+            thumbColor="#ffffff"
+          />
+        </View>
+
+        <View style={styles.settingItem}>
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingTitle}>Thông báo email</Text>
+            <Text style={styles.settingDesc}>Nhận thông báo qua email</Text>
+          </View>
+          <Switch
+            value={emailNotifications}
+            onValueChange={setEmailNotifications}
+            trackColor={{ false: "#e5e7eb", true: "#ff6600" }}
+            thumbColor="#ffffff"
+          />
+        </View>
+      </View>
+
       {/* Cài đặt tài khoản */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Cài đặt tài khoản</Text>
@@ -181,16 +255,6 @@ export default function SettingsScreen() {
           </View>
           <TouchableOpacity style={styles.actionButton}>
             <Text style={styles.actionButtonText}>Thay đổi</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.settingItem}>
-          <View style={styles.settingInfo}>
-            <Text style={styles.settingTitle}>Thông báo email</Text>
-            <Text style={styles.settingDesc}>Quản lý thông báo qua email</Text>
-          </View>
-          <TouchableOpacity style={styles.actionButton}>
-            <Text style={styles.actionButtonText}>Cài đặt</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -265,6 +329,16 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Modal xin quyền thông báo */}
+      {accessToken && (
+        <NotificationPermissionModal
+          isVisible={showPermissionModal}
+          onClose={() => setShowPermissionModal(false)}
+          jwt={accessToken}
+          onSuccess={handleNotificationSuccess}
+        />
+      )}
     </ScrollView>
   );
 

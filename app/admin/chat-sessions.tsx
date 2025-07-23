@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -22,9 +22,9 @@ const { width } = Dimensions.get("window");
 const getApiBaseUrl = () => {
   if (Platform.OS === "android") {
     console.log(
-      "[CHAT_SESSIONS] Using Android API URL: http://10.0.2.2:3000/api/v1"
+      "[CHAT_SESSIONS] Using Android API URL: http://192.168.1.6:3000/api/v1"
     );
-    return "http://10.0.2.2:3000/api/v1"; // Cho Android Emulator
+    return "http://192.168.1.6:3000/api/v1"; // Cho Android
   } else if (Platform.OS === "ios") {
     // Trên iOS simulator, localhost sẽ trỏ đến máy ảo iOS
     console.log(
