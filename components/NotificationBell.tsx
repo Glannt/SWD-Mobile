@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -76,6 +77,313 @@ export default function NotificationBell() {
     );
   };
 
+  // Hiển thị FCM token đầy đủ
+  const showFullFcmToken = async () => {
+    try {
+      const token = await AsyncStorage.getItem("fcm_token");
+      if (token) {
+        console.log("[FCM] FULL TOKEN FOR DEBUGGING:", token);
+        Alert.alert(
+          "FCM Token Đầy Đủ",
+          `Đây là token FCM đầy đủ của thiết bị:\n\n${token}\n\nĐã log ra console để dễ copy.`,
+          [{ text: "OK" }]
+        );
+      } else {
+        Alert.alert(
+          "Không có FCM Token",
+          "Không tìm thấy FCM token trong bộ nhớ. Hãy thử đăng ký token trước.",
+          [{ text: "OK" }]
+        );
+      }
+    } catch (error) {
+      console.error("[FCM] Error getting full token:", error);
+      Alert.alert("Lỗi", "Không thể lấy token: " + error.message);
+    }
+  };
+
+  // Kiểm tra môi trường chi tiết
+  const checkFirebaseEnvironment = async () => {
+    console.log(
+      "\n\n================ NOTIFICATION BELL ENVIRONMENT CHECK ================"
+    );
+    console.log(
+      "🔍 Checking Firebase environment from NotificationBell component"
+    );
+
+    try {
+      // 1. Kiểm tra cài đặt force environment
+      try {
+        const firebaseModule = require("../services/firebase-messaging");
+        console.log(
+          "- FORCE_REAL_FIREBASE:",
+          firebaseModule.FORCE_REAL_FIREBASE
+        );
+      } catch (error) {
+        console.log("❌ Không thể đọc FORCE_REAL_FIREBASE:", error.message);
+      }
+
+      try {
+        const fcmHook = require("../hooks/useFcmToken");
+        console.log(
+          "- FORCE_REAL_ENVIRONMENT:",
+          fcmHook.FORCE_REAL_ENVIRONMENT
+        );
+      } catch (error) {
+        console.log("❌ Không thể đọc FORCE_REAL_ENVIRONMENT:", error.message);
+      }
+
+      // 2. Kiểm tra token hiện tại
+      const token = await AsyncStorage.getItem("fcm_token");
+      console.log(
+        "- Current token:",
+        token
+          ? token.startsWith("mock")
+            ? "MOCK TOKEN ⚠️"
+            : "REAL TOKEN ✅"
+          : "No token found"
+      );
+
+      // 3. Thử import Firebase trực tiếp để kiểm tra môi trường thực
+      console.log("\n👉 Thử nghiệm khả năng truy cập Firebase trực tiếp:");
+      try {
+        console.log("📲 Trying direct Firebase import...");
+        const firebaseApp = require("@react-native-firebase/app").default;
+        console.log("✅ Firebase direct import successful");
+
+        console.log("- Firebase SDK version:", firebaseApp.SDK_VERSION);
+        console.log("- Firebase apps initialized:", firebaseApp.apps.length);
+
+        if (firebaseApp.apps.length > 0) {
+          console.log("- Firebase app name:", firebaseApp.app().name);
+          try {
+            // Thử lấy token trực tiếp từ Firebase
+            console.log(
+              "📱 Attempting to get token directly from Firebase Messaging"
+            );
+            const messaging =
+              require("@react-native-firebase/messaging").default;
+
+            // Kiểm tra quyền
+            try {
+              const authStatus = await messaging().requestPermission();
+              console.log("- Permission request result:", authStatus);
+            } catch (permError) {
+              console.log("- Permission request error:", permError);
+            }
+
+            // Đăng ký thiết bị
+            try {
+              await messaging().registerDeviceForRemoteMessages();
+              console.log(
+                "- Device registered for remote messages successfully"
+              );
+            } catch (regError) {
+              console.log(
+                "- Device registration error or already registered:",
+                regError.message
+              );
+            }
+
+            // Lấy token trực tiếp
+            const directToken = await messaging().getToken();
+            console.log("✅ SUCCESSFULLY GOT DIRECT FCM TOKEN!");
+            console.log(
+              "- Direct token:",
+              directToken.substring(0, 20) + "..."
+            );
+            console.log("- Token length:", directToken.length);
+            console.log("- Is mock token:", directToken.startsWith("mock"));
+          } catch (tokenError) {
+            console.log("❌ Could not get direct token:", tokenError);
+          }
+        } else {
+          console.log(
+            "❌ No Firebase apps initialized - need to call initializeApp() first"
+          );
+
+          // Thử khởi tạo Firebase app
+          try {
+            console.log("📱 Attempting to initialize Firebase app...");
+            await firebaseApp.initializeApp({});
+            console.log("✅ Firebase app initialization successful");
+          } catch (initError) {
+            console.log("❌ Firebase app initialization error:", initError);
+          }
+        }
+      } catch (firebaseError) {
+        console.log("❌ Direct Firebase import failed:", firebaseError);
+      }
+
+      // 4. Kiểm tra môi trường hiện tại với các phương pháp khác nhau
+      console.log("\n👉 Kiểm tra môi trường bằng nhiều phương pháp:");
+      console.log("- __DEV__:", __DEV__);
+      console.log(
+        "- process.env.EAS_BUILD_RUNNER:",
+        process.env.EAS_BUILD_RUNNER
+      );
+      console.log("- global.expo exists:", global.expo !== undefined);
+
+      try {
+        const Constants = require("expo-constants");
+        console.log(
+          "- Expo Constants executionEnvironment:",
+          Constants.default?.executionEnvironment
+        );
+      } catch (error) {
+        console.log("❌ Could not check Expo Constants:", error.message);
+      }
+
+      console.log(
+        "================ END NOTIFICATION BELL ENVIRONMENT CHECK ================\n\n"
+      );
+
+      // 5. Hiển thị kết quả chi tiết
+      let message = await buildEnvironmentDetailsMessage();
+      Alert.alert("Kiểm Tra Môi Trường Firebase", message, [
+        { text: "OK" },
+        {
+          text: "Tạo Token Mới",
+          onPress: resetFcmToken,
+        },
+      ]);
+    } catch (error) {
+      console.error("❌ Error in environment check:", error);
+      Alert.alert("Lỗi", "Lỗi kiểm tra môi trường: " + error.message);
+    }
+  };
+
+  // Tạo thông báo chi tiết về môi trường
+  const buildEnvironmentDetailsMessage = async () => {
+    try {
+      let message = "";
+      const token = await AsyncStorage.getItem("fcm_token");
+
+      // Trạng thái token
+      if (token) {
+        message += `🔑 FCM Token: ${
+          token.startsWith("mock") ? "GIẢẢ" : "THẬT"
+        }\n`;
+        message += `📏 Độ dài token: ${token.length}\n`;
+        message += token.startsWith("mock")
+          ? "⚠️ Đây là token giả, không hoạt động với Firebase\n\n"
+          : "✅ Đây có vẻ là token thật\n\n";
+      } else {
+        message += "⚠️ Chưa có FCM token\n\n";
+      }
+
+      // Phát hiện môi trường
+      try {
+        const firebaseModule = require("../services/firebase-messaging");
+        const fcmHook = require("../hooks/useFcmToken");
+
+        message += `🔄 Phát hiện môi trường:\n`;
+        message += `- FORCE_REAL_FIREBASE: ${
+          firebaseModule.FORCE_REAL_FIREBASE ? "BẬT ✓" : "TẮT ✗"
+        }\n`;
+        message += `- FORCE_REAL_ENVIRONMENT: ${
+          fcmHook.FORCE_REAL_ENVIRONMENT ? "BẬT ✓" : "TẮT ✗"
+        }\n`;
+
+        // Kiểm tra với isRunningInExpoGo
+        try {
+          const inExpo = firebaseModule.isRunningInExpoGo();
+          message += `- Đang chạy trong Expo Go: ${
+            inExpo ? "CÓ ✗" : "KHÔNG ✓"
+          }\n\n`;
+        } catch (expoError) {
+          message += `- Lỗi kiểm tra Expo Go\n\n`;
+        }
+      } catch (error) {
+        message += `- Không thể đọc cấu hình: ${error.message}\n\n`;
+      }
+
+      // Kiểm tra Firebase trực tiếp
+      try {
+        const firebaseApp = require("@react-native-firebase/app").default;
+        message += "✅ Firebase có thể import trực tiếp\n";
+        message += `- Apps đã khởi tạo: ${firebaseApp.apps.length}\n`;
+
+        if (firebaseApp.apps.length > 0) {
+          message += `- App name: ${firebaseApp.app().name}\n\n`;
+
+          try {
+            const messaging =
+              require("@react-native-firebase/messaging").default;
+            const directToken = await messaging().getToken();
+            message += "✅ Lấy token trực tiếp thành công!\n";
+            message += `Token mới: ${directToken.substring(0, 15)}...\n\n`;
+            message += "👉 Bạn nên nhấn 'Tạo Token Mới'";
+          } catch (tokenError) {
+            message += `\n❌ Lỗi lấy token trực tiếp:\n${tokenError.message}\n`;
+          }
+        } else {
+          message += "⚠️ Chưa khởi tạo Firebase app\n";
+        }
+      } catch (error) {
+        message += `❌ Không thể truy cập Firebase:\n${error.message}\n`;
+        message +=
+          "👉 Bạn có thể đang chạy trong Expo Go hoặc chưa cài đặt Firebase đúng cách\n";
+      }
+
+      return message;
+    } catch (error) {
+      return "❌ Lỗi: " + error.message;
+    }
+  };
+
+  // Kiểm tra Firebase trực tiếp và trả về kết quả
+  const checkDirectFirebase = async () => {
+    try {
+      let results = "";
+      const token = await AsyncStorage.getItem("fcm_token");
+
+      if (token) {
+        results += `🔑 Token hiện tại: ${token.substring(0, 15)}...\n`;
+        results += `📏 Độ dài token: ${token.length}\n`;
+        results += `${
+          token.startsWith("mock")
+            ? "⚠️ Đây là mock token"
+            : "✅ Có vẻ là token thật"
+        }\n\n`;
+      } else {
+        results += "⚠️ Chưa có FCM token\n\n";
+      }
+
+      try {
+        const firebaseApp = require("@react-native-firebase/app").default;
+        results += "✅ Import Firebase thành công\n";
+
+        if (firebaseApp.apps.length > 0) {
+          results += `📱 Firebase app: ${firebaseApp.app().name}\n`;
+
+          try {
+            const messaging =
+              require("@react-native-firebase/messaging").default;
+            const directToken = await messaging().getToken();
+            results += "\n✅ Lấy token trực tiếp thành công\n";
+            results += `🔑 Token trực tiếp: ${directToken.substring(
+              0,
+              15
+            )}...\n`;
+            results += `📏 Độ dài: ${directToken.length}\n`;
+          } catch (tokenError) {
+            results += `\n❌ Lỗi lấy token trực tiếp: ${tokenError.message}\n`;
+          }
+        } else {
+          results += "⚠️ Chưa khởi tạo Firebase app\n";
+        }
+      } catch (error) {
+        results += `❌ Lỗi import Firebase: ${error.message}\n`;
+        results +=
+          "Có thể đang chạy trong Expo Go hoặc chưa cài đặt Firebase\n";
+      }
+
+      return results;
+    } catch (error) {
+      return "❌ Lỗi: " + error.message;
+    }
+  };
+
   // Hàm mới: Kiểm tra toàn diện FCM
   const runFcmTest = async () => {
     const results = {
@@ -90,10 +398,14 @@ export default function NotificationBell() {
     };
 
     try {
-      // Kiểm tra môi trường Expo Go
-      const isExpoGoEnv = __DEV__ && !process.env.EAS_BUILD_RUNNER;
+      // Sử dụng cùng một phương pháp phát hiện môi trường từ firebase-messaging.ts
+      const firebaseModule = require("../services/firebase-messaging");
+      const isExpoGoEnv = firebaseModule.isRunningInExpoGo();
       results.isExpoGo = isExpoGoEnv;
-      console.log("[FCM-TEST] Running in Expo Go:", isExpoGoEnv);
+      console.log(
+        "[FCM-TEST] Running in Expo Go (using firebase-messaging detection):",
+        isExpoGoEnv
+      );
 
       results.firebaseInitialized = true; // Giả sử luôn được khởi tạo (mock hoặc thật)
 
@@ -102,6 +414,11 @@ export default function NotificationBell() {
       results.hasToken = !!token;
       if (token) {
         results.token = token.substring(0, 10) + "...";
+        console.log(
+          "[FCM-TEST] Current token type:",
+          token.startsWith("mock") ? "MOCK TOKEN" : "REAL TOKEN"
+        );
+        console.log("[FCM-TEST] Token full:", token);
       }
 
       // 2. Kiểm tra quyền thông báo
@@ -188,24 +505,73 @@ export default function NotificationBell() {
     }
   };
 
-  // Thêm hàm để tạo test FCM token với giá trị cụ thể
-  const createTestFcmToken = async () => {
+  // Xóa token FCM cũ và tạo mới
+  const resetFcmToken = async () => {
     try {
-      const FCM_TOKEN_STORAGE_KEY = "fcm_token";
-      const testToken =
-        "test-fcm-token-" + Math.random().toString(36).substring(2, 8);
-      await AsyncStorage.setItem(FCM_TOKEN_STORAGE_KEY, testToken);
-      console.log("[TEST] Created test FCM token:", testToken);
+      // Xóa token cũ
+      await AsyncStorage.removeItem("fcm_token");
+      console.log("[FCM] Removed old token from AsyncStorage");
 
-      // Cập nhật UI
+      // Kiểm tra môi trường
+      const firebaseModule = require("../services/firebase-messaging");
+      const isExpoGoEnv = firebaseModule.isRunningInExpoGo();
+
+      if (!isExpoGoEnv) {
+        // Nếu không phải Expo Go, tạo token thực mới
+        try {
+          console.log(
+            "[FCM] Requesting new real token from Firebase directly..."
+          );
+          const messaging = require("@react-native-firebase/messaging").default;
+
+          // Đăng ký thiết bị nếu cần
+          if (Platform.OS !== "web") {
+            try {
+              await messaging().registerDeviceForRemoteMessages();
+              console.log("[FCM] Device registered for remote messages");
+            } catch (registerError) {
+              console.error("[FCM] Device registration error:", registerError);
+            }
+          }
+
+          // Lấy token mới trực tiếp từ Firebase
+          const newToken = await messaging().getToken();
+          if (newToken) {
+            // Lưu token mới
+            await AsyncStorage.setItem("fcm_token", newToken);
+            console.log(
+              "[FCM] Got new real token:",
+              newToken.substring(0, 15) + "..."
+            );
+            Alert.alert(
+              "Thành công",
+              "Đã xóa token cũ và tạo token mới thành công.\n\nToken mới: " +
+                newToken.substring(0, 15) +
+                "..."
+            );
+            return;
+          }
+        } catch (firebaseError) {
+          console.error("[FCM] Error getting new token:", firebaseError);
+        }
+      } else {
+        console.log("[FCM] Running in Expo Go - cannot get real token");
+      }
+
       Alert.alert(
-        "Token test đã tạo",
-        `Token FCM: ${testToken}\n\nToken đã được lưu vào storage.`
+        "Đã xóa token",
+        "Token cũ đã được xóa khỏi bộ nhớ. Token mới sẽ được tạo khi bạn đăng ký thông báo.",
+        [
+          { text: "OK" },
+          {
+            text: "Đăng ký ngay",
+            onPress: () => registerFcmToken(),
+          },
+        ]
       );
-      return testToken;
     } catch (error) {
-      console.error("[TEST] Error creating test token:", error);
-      return null;
+      console.error("[FCM] Error resetting token:", error);
+      Alert.alert("Lỗi", "Không thể xóa token: " + error.message);
     }
   };
 
@@ -396,10 +762,17 @@ export default function NotificationBell() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.button, { backgroundColor: "#4CAF50" }]}
-                onPress={createTestFcmToken}
+                style={[styles.button, { backgroundColor: "#FF9800" }]}
+                onPress={showFullFcmToken}
               >
-                <Text style={styles.buttonText}>Tạo FCM Token Thử</Text>
+                <Text style={styles.buttonText}>Xem Token Đầy Đủ</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: "#9C27B0" }]}
+                onPress={checkFirebaseEnvironment}
+              >
+                <Text style={styles.buttonText}>Kiểm Tra Môi Trường</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -407,6 +780,13 @@ export default function NotificationBell() {
                 onPress={testApiConnection}
               >
                 <Text style={styles.buttonText}>Kiểm Tra API Chi Tiết</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: "#f44336" }]}
+                onPress={resetFcmToken}
+              >
+                <Text style={styles.buttonText}>Xóa Token FCM Cũ</Text>
               </TouchableOpacity>
             </View>
           </View>

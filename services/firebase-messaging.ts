@@ -16,64 +16,88 @@ let firebaseAppInstance = null;
 let firebaseMessagingInstance = null;
 
 /**
- * Kiểm tra xem đang chạy trong Expo Go hay development build
+ * Hàm singleton để kiểm tra xem có đang chạy trong Expo Go hay không
+ * Được sử dụng làm điểm phát hiện môi trường chính cho toàn bộ ứng dụng
+ * @returns {boolean} true nếu đang chạy trong Expo Go, false nếu đang chạy trong build thật
  */
 export const isRunningInExpoGo = () => {
-  // Check override flag first
+  // QUAN TRỌNG: Check override flag first - nếu có cờ force thì luôn trả về false (không phải Expo Go)
   if (FORCE_REAL_FIREBASE) {
-    console.log('[FCM] FORCE_REAL_FIREBASE is true, using real Firebase implementation');
+    console.log("[FCM] FORCE_REAL_FIREBASE is explicitly TRUE - forcing real Firebase implementation");
+    console.log("[FCM] This should override all environment checks and return false (not Expo Go)");
     return false;
   }
 
   // Thêm nhiều phương pháp kiểm tra
   try {
+    console.log("[FCM] Environment detection details:");
+
     // 1. Kiểm tra biến môi trường trực tiếp
     if (process.env.EAS_BUILD_RUNNER) {
-      console.log('[FCM] EAS_BUILD_RUNNER detected, not in Expo Go');
+      console.log("[FCM] EAS_BUILD_RUNNER detected, not in Expo Go");
       return false;
     }
+    console.log("- EAS_BUILD_RUNNER:", process.env.EAS_BUILD_RUNNER || "not found");
     
     // 2. Kiểm tra global.expo (dấu hiệu chạy trong Expo Go)
     if (global.expo !== undefined) {
-      console.log('[FCM] global.expo detected, likely in Expo Go');
+      console.log("[FCM] global.expo detected, likely in Expo Go");
+      console.log("- global.expo:", global.expo ? "exists" : "undefined");
       return true;
     }
+    console.log("- global.expo: not found (good)");
     
     // 3. Kiểm tra expo constant
     try {
       const Constants = require('expo-constants');
       const executionEnvironment = Constants.default?.executionEnvironment;
+      console.log("- executionEnvironment:", executionEnvironment);
       
       if (executionEnvironment === 'bare') {
-        console.log('[FCM] Bare workflow detected, not in Expo Go');
+        console.log("[FCM] Bare workflow detected, not in Expo Go");
         return false;
       }
       if (executionEnvironment === 'managed') {
-        console.log('[FCM] Managed workflow detected, likely in Expo Go');
+        console.log("[FCM] Managed workflow detected, likely in Expo Go");
         return true;
       }
     } catch (constError) {
-      console.log('[FCM] Error checking Constants:', constError);
+      console.log("[FCM] Error checking Constants:", constError.message || constError);
     }
 
     // 4. Thử import firebase trực tiếp
     try {
+      console.log("[FCM] Attempting direct Firebase import...");
       const firebaseApp = require('@react-native-firebase/app').default;
       if (firebaseApp && typeof firebaseApp === 'function') {
-        console.log('[FCM] Firebase app can be imported - likely NOT in Expo Go');
+        console.log("[FCM] Firebase app can be imported directly - NOT in Expo Go");
+        
+        // Check Firebase configuration - nhưng không làm hỏng quá trình phát hiện
+        try {
+          console.log("- Firebase SDK version:", firebaseApp.SDK_VERSION || "unknown");
+          console.log("- Firebase apps initialized:", firebaseApp.apps.length);
+          if (firebaseApp.apps.length > 0) {
+            console.log("- Default app name:", firebaseApp.app().name);
+          } else {
+            console.log("- No Firebase apps initialized yet");
+          }
+        } catch (versionError) {
+          console.log("[FCM] Could not get Firebase details:", versionError.message || versionError);
+        }
+        
         return false;
       }
     } catch (err) {
-      console.log('[FCM] Firebase import error - likely in Expo Go:', err.message);
-      return true;
+      console.log("[FCM] Firebase import error:", err.message || err);
+      console.log("[FCM] This likely means we're in Expo Go or Firebase is not configured properly");
     }
 
     // Mặc định dựa vào __DEV__ nếu tất cả cách khác thất bại
     const isDev = __DEV__ && !process.env.EAS_BUILD_RUNNER;
-    console.log('[FCM] Using default detection method, Expo Go:', isDev);
+    console.log("[FCM] Using default detection method - isDev:", isDev);
     return isDev;
   } catch (error) {
-    console.log('[FCM] Error detecting environment, assuming not Expo Go:', error);
+    console.log("[FCM] Error detecting environment, assuming not Expo Go:", error);
     return false; // Nếu có lỗi, giả định không chạy trong Expo Go để sử dụng Firebase thật
   }
 };
@@ -220,9 +244,23 @@ export async function getFcmToken() {
     const savedToken = await AsyncStorage.getItem(FCM_TOKEN_STORAGE_KEY);
     
     if (savedToken) {
-      console.log('[FCM] Using saved token:', savedToken.substring(0, 15) + '...');
-      console.log('[FCM] Token type check:', savedToken.startsWith("f") ? "Looks like real FCM token" : "Not a standard FCM token pattern");
-      return savedToken;
+      // Kiểm tra xem token có phải là token mock hay không
+      if (savedToken.startsWith('mock-fcm-token')) {
+        console.log('[FCM] Found saved mock token - will be replaced with real token if not in Expo Go');
+        
+        // Nếu không chạy trong Expo Go, xóa token mock và lấy token thật
+        if (!isRunningInExpoGo()) {
+          console.log('[FCM] Not running in Expo Go, will get real token instead of mock');
+          await AsyncStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
+        } else {
+          console.log('[FCM] Running in Expo Go, using saved mock token');
+          return savedToken;
+        }
+      } else {
+        // Token thật có sẵn, sử dụng lại
+        console.log('[FCM] Using saved real token:', savedToken.substring(0, 15) + '...');
+        return savedToken;
+      }
     }
     
     // Xử lý khác nhau cho Expo Go và build thật
@@ -254,7 +292,7 @@ export async function getFcmToken() {
         console.log('[FCM] Device registered successfully');
       } catch (registerError) {
         console.error('[FCM] Error registering device for remote messages:', registerError);
-        // Continue to getToken anyway
+        // Continue to getToken anyway as this might be already registered
       }
     }
     
@@ -264,7 +302,9 @@ export async function getFcmToken() {
     
     if (token) {
       console.log('[FCM] New token generated:', token.substring(0, 15) + '...');
+      console.log('[FCM] Token length:', token.length);
       console.log('[FCM] Token type check:', token.startsWith("f") ? "Looks like real FCM token" : "Not a standard FCM token pattern");
+      
       // Lưu token để sử dụng sau này
       await AsyncStorage.setItem(FCM_TOKEN_STORAGE_KEY, token);
       return token;
@@ -323,6 +363,30 @@ export async function registerFcmTokenWithServer(token: string, jwt: string) {
       // Tạo URL và body giống hệt như web frontend để đảm bảo tương thích
       console.log('[FCM] Preparing request to update FCM token...');
       
+      // Thêm log chi tiết của request
+      const requestUrl = 'users/fcm-token';
+      const requestOptions = {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwt}`,
+        },
+        body: JSON.stringify({ fcmToken: token }),
+      };
+      
+      // Log chi tiết request để debug
+      console.log('=================== FCM TOKEN UPDATE REQUEST ===================');
+      console.log('[FCM DEBUG] Would send request to:', apiModule.getApiBaseUrl() + '/api/v1/' + requestUrl);
+      console.log('[FCM DEBUG] Request method:', requestOptions.method);
+      console.log('[FCM DEBUG] Request headers:', JSON.stringify(requestOptions.headers));
+      console.log('[FCM DEBUG] Request body:', requestOptions.body);
+      console.log('[FCM DEBUG] JWT validity:', jwt ? (jwt.split('.').length === 3 ? 'Valid format' : 'Invalid format') : 'No JWT');
+      console.log('[FCM DEBUG] Token format check:', token.startsWith("f") ? "Matches FCM pattern" : "Not standard FCM pattern");
+      console.log('[FCM DEBUG] Token length:', token.length);
+      console.log('==============================================================');
+      
+      // Gửi API request thực tế để đăng ký token
+      console.log('[FCM] Sending actual API request to register token with server...');
       const response = await apiModule.fetchApi('users/fcm-token', {
         method: 'PATCH',
         headers: {
@@ -343,14 +407,14 @@ export async function registerFcmTokenWithServer(token: string, jwt: string) {
       if (fetchError.message && fetchError.message.includes('Cannot PATCH')) {
         console.error('[FCM] Endpoint issue detected! Check API path and server logs');
         
-        // Thử endpoint khác để debug
+        // Kiểm tra kết nối API thay vì kiểm tra health endpoint
         try {
           const apiModule = require('../utils/api');
-          // Thử kiểm tra health endpoint
-          const healthCheck = await apiModule.testApiConnection();
-          console.log('[FCM] Health check after error:', healthCheck);
-        } catch (healthError) {
-          console.error('[FCM] Health check failed:', healthError);
+          // Kiểm tra kết nối API
+          const apiConnectionStatus = await apiModule.testApiConnection();
+          console.log('[FCM] API connection test result:', apiConnectionStatus);
+        } catch (apiError) {
+          console.error('[FCM] API connection test failed:', apiError);
         }
       }
       
@@ -393,16 +457,12 @@ export function setupForegroundNotificationHandler(
       console.log('[FCM] Message data payload:', JSON.stringify(remoteMessage?.data));
       console.log('[FCM] ==========================================');
       
-      // Đảm bảo thông báo luôn được hiển thị khi debug
-      if (DEBUG_FCM) {
-        Alert.alert(
-          'FCM Debug: Thông báo nhận được',
-          `Tiêu đề: ${remoteMessage?.notification?.title || 'N/A'}\n` +
-          `Nội dung: ${remoteMessage?.notification?.body || 'N/A'}\n` +
-          `Data: ${JSON.stringify(remoteMessage?.data || {})}`,
-          [{ text: "OK" }]
-        );
-      }
+      // LUÔN hiển thị thông báo khi nhận được để không bỏ sót
+      Alert.alert(
+        remoteMessage?.notification?.title || 'Thông báo mới',
+        remoteMessage?.notification?.body || 'Bạn có thông báo mới',
+        [{ text: "OK" }]
+      );
       
       // Gọi callback để cập nhật state trong NotificationContext
       onNotificationReceived(remoteMessage);
@@ -469,10 +529,19 @@ export async function setupBackgroundNotificationHandler() {
       const jwt = await AsyncStorage.getItem('access_token');
       if (jwt) {
         try {
+          // Log chi tiết về token mới
+          console.log('[FCM] =================== TOKEN REFRESH ===================');
+          console.log('[FCM] New token after refresh:', token.substring(0, 15) + '...');
+          console.log('[FCM] New token length:', token.length);
+          console.log('[FCM] Registering refreshed token with backend');
+          console.log('[FCM] JWT available:', !!jwt);
+          console.log('[FCM] =================================================');
+          
+          // Đăng ký token mới với server
           await registerFcmTokenWithServer(token, jwt);
           console.log('[FCM] New token registered with server after refresh');
         } catch (error) {
-          console.error('[FCM] Error registering refreshed token:', error);
+          console.error('[FCM] Error handling refreshed token:', error);
         }
       }
     });
@@ -589,7 +658,16 @@ export async function setupNotifications(jwt: string | null) {
       return false;
     }
     
-    console.log('[FCM] Got token, registering with server...');
+    console.log('[FCM] Got token, preparing registration with server...');
+    
+    // Log chi tiết
+    console.log('[FCM] =================== SETUP NOTIFICATIONS ===================');
+    console.log('[FCM] Token to register:', token.substring(0, 15) + '...');
+    console.log('[FCM] Token length:', token.length);
+    console.log('[FCM] JWT available:', !!jwt);
+    console.log('[FCM] JWT first 15 chars:', jwt.substring(0, 15) + '...');
+    console.log('[FCM] Registering token with backend');
+    console.log('[FCM] ==========================================================');
     
     // Đăng ký token với server
     const registered_token = await registerFcmTokenWithServer(token, jwt);

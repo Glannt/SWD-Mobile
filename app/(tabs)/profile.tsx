@@ -29,10 +29,10 @@ const getApiBaseUrl = () => {
     } else if (Platform.OS === "ios") {
       // Trên iOS, sử dụng địa chỉ IP thay vì localhost
       // TODO: Thay thế bằng địa chỉ IP của máy chủ thực tế hoặc domain
-      return "http://192.168.1.6:3000/api/v1"; // Thay đổi IP này
+      return "http://192.168.1.9:3000/api/v1"; // Thay đổi IP này
     } else if (Platform.OS === "android") {
       // Trên Android có thể sử dụng 10.0.2.2 để trỏ đến localhost của máy chủ
-      return "http://192.168.1.6:3000/api/v1";
+      return "http://192.168.1.9:3000/api/v1";
     }
   } catch (e) {
     console.error("[MOBILE] Error getting API base URL:", e);

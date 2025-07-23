@@ -11,6 +11,9 @@ import { Alert } from "react-native";
 // Force dùng Firebase thực thay vì mock
 export const FORCE_REAL_FIREBASE = true;
 
+// Key cho FCM token
+const FCM_TOKEN_STORAGE_KEY = "fcm_token";
+
 // Định nghĩa giống với frontend
 type Notification = {
   id: string;
@@ -42,6 +45,37 @@ const defaultHandlers = {
   setupForegroundNotificationHandler: () => () => {},
   setupNotificationOpenedHandler: () => () => {},
   setupNotifications: async () => false,
+};
+
+/**
+ * Kiểm tra xem có đang sử dụng test token không và hiện cảnh báo
+ */
+const checkForMockToken = async () => {
+  try {
+    const token = await AsyncStorage.getItem(FCM_TOKEN_STORAGE_KEY);
+
+    if (token && token.startsWith("mock-fcm-token")) {
+      console.warn(
+        "[Notification] WARNING: Using mock FCM token. Notifications will NOT work with backend!"
+      );
+
+      if (__DEV__) {
+        setTimeout(() => {
+          Alert.alert(
+            "⚠️ Cảnh báo: Token FCM giả",
+            "Ứng dụng đang sử dụng mock token. Thông báo sẽ KHÔNG hoạt động với backend thật!\n\n" +
+              "Hãy chạy development build để sử dụng token thật.",
+            [{ text: "OK" }]
+          );
+        }, 2000); // Delay để không chặn UI khởi động
+      }
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("[Notification] Error checking for mock token:", error);
+    return false;
+  }
 };
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({
@@ -91,6 +125,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({
             moduleHandlers.setupNotificationOpenedHandler,
           setupNotifications: moduleHandlers.setupNotifications,
         });
+
+        // Kiểm tra mock token
+        await checkForMockToken();
 
         // Tải thông báo đã lưu
         try {

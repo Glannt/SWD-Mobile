@@ -14,10 +14,11 @@ const getApiBaseUrl = () => {
     } else if (Platform.OS === 'ios') {
       // Trên iOS, sử dụng địa chỉ IP thay vì localhost
       // TODO: Thay thế bằng địa chỉ IP của máy chủ thực tế hoặc domain
-      return 'http://192.168.1.6:3000/api/v1'; // Thay đổi IP này
+      return 'http://192.168.1.9:3000/api/v1'; // Thay đổi IP này
     } else if (Platform.OS === 'android') {
       // Trên Android có thể sử dụng 10.0.2.2 để trỏ đến localhost của máy chủ
-      return 'http://192.168.1.6:3000/api/v1';
+      console.log("Using Android API");
+      return 'http://192.168.1.9:3000/api/v1'; // Thay đổi IP này
     }
   } catch (e) {
     console.error('[MOBILE] Error getting API base URL:', e);
@@ -193,20 +194,45 @@ export function useChatMobile({ accessToken: providedToken, userId: providedUser
       try {
         console.log("[MOBILE] Testing API connection to:", API_BASE_URL);
         const startTime = Date.now();
-        const response = await fetch(`${API_BASE_URL}/health`, { 
+        
+        // Sử dụng root API endpoint thay vì /health
+        const response = await fetch(`${API_BASE_URL}`, { 
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         });
         const endTime = Date.now();
         
-        const responseText = await response.text();
+        let responseText;
+        try {
+          responseText = await response.text();
+        } catch (e) {
+          responseText = "Could not read response text";
+        }
+        
         console.log(
           `[MOBILE] API connection test ${response.ok ? 'successful' : 'failed'}: `,
           `Status: ${response.status}, Time: ${endTime - startTime}ms, Response:`, 
-          responseText
+          responseText.substring(0, 100) // Chỉ hiện 100 ký tự đầu để tránh log quá dài
         );
+        
+        // Nếu root API không thành công, thử endpoint users/profile
+        if (!response.ok) {
+          console.log("[MOBILE] Root API test failed, trying /api/v1 endpoint...");
+          const apiV1Response = await fetch(`${API_BASE_URL}/api/v1`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          console.log(
+            `[MOBILE] API V1 test ${apiV1Response.ok ? 'successful' : 'failed'}: `,
+            `Status: ${apiV1Response.status}`
+          );
+        }
+        
+        return response.ok;
       } catch (error) {
         console.error("[MOBILE] API connection test failed with error:", error);
+        return false;
       }
     };
     

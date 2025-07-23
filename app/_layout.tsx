@@ -54,32 +54,44 @@ export default function RootLayout() {
 
     // Sửa cách kiểm tra môi trường Expo Go
     const isExpoGo = () => {
+      console.log(
+        "\n\n==================== ENVIRONMENT CHECK LOG ===================="
+      );
+      console.log("💡 CHECKING ENVIRONMENT IN _layout.tsx...");
+
       // Force đầu tiên
       if (FORCE_REAL_ENVIRONMENT) {
+        console.log("🔴 FORCE_REAL_ENVIRONMENT is TRUE in _layout.tsx");
+        console.log("Should force using real Firebase implementation");
         console.log(
-          "[App] FORCE_REAL_ENVIRONMENT is true, bypassing Expo Go checks"
+          "==================== END ENVIRONMENT CHECK ====================\n\n"
         );
         return false;
       }
 
       try {
         // Kiểm tra chi tiết hơn về môi trường
-        console.log("[ENV DEBUG] __DEV__:", __DEV__);
-        console.log(
-          "[ENV DEBUG] EAS_BUILD_RUNNER:",
-          process.env.EAS_BUILD_RUNNER
-        );
-        console.log("[ENV DEBUG] expo:", global.expo !== undefined);
+        console.log("📱 Device environment variables:");
+        console.log("- __DEV__:", __DEV__);
+        console.log("- EAS_BUILD_RUNNER:", process.env.EAS_BUILD_RUNNER);
+        console.log("- expo global object exists:", global.expo !== undefined);
+        console.log("- Platform.OS:", Platform.OS);
 
         // 1. Kiểm tra biến môi trường trực tiếp
         if (process.env.EAS_BUILD_RUNNER) {
-          console.log("[App] EAS_BUILD_RUNNER detected, not in Expo Go");
+          console.log("✅ EAS_BUILD_RUNNER detected, not in Expo Go");
+          console.log(
+            "==================== END ENVIRONMENT CHECK ====================\n\n"
+          );
           return false;
         }
 
         // 2. Kiểm tra global.expo (dấu hiệu chạy trong Expo Go)
         if (global.expo !== undefined) {
-          console.log("[App] global.expo detected, likely in Expo Go");
+          console.log("❌ global.expo detected, likely in Expo Go");
+          console.log(
+            "==================== END ENVIRONMENT CHECK ====================\n\n"
+          );
           return true;
         }
 
@@ -87,42 +99,62 @@ export default function RootLayout() {
         try {
           const Constants = require("expo-constants");
           const executionEnvironment = Constants.default?.executionEnvironment;
-          console.log(
-            "[ENV DEBUG] executionEnvironment:",
-            executionEnvironment
-          );
+          console.log("- executionEnvironment:", executionEnvironment);
 
           if (executionEnvironment === "bare") {
-            console.log("[App] Bare workflow detected, not in Expo Go");
+            console.log("✅ Bare workflow detected, not in Expo Go");
+            console.log(
+              "==================== END ENVIRONMENT CHECK ====================\n\n"
+            );
             return false;
           }
           if (executionEnvironment === "managed") {
-            console.log("[App] Managed workflow detected, likely in Expo Go");
+            console.log("❌ Managed workflow detected, likely in Expo Go");
+            console.log(
+              "==================== END ENVIRONMENT CHECK ====================\n\n"
+            );
             return true;
           }
         } catch (error) {
-          console.log("[ENV DEBUG] Error checking Constants:", error);
+          console.log("⚠️ Error checking Constants:", error);
         }
 
         // 4. Thử kiểm tra khả năng truy cập tới native modules Firebase
         try {
+          console.log("📲 Trying to import @react-native-firebase/app...");
           const firebase = require("@react-native-firebase/app");
           if (firebase && typeof firebase === "object") {
-            console.log("[App] Firebase module accessible, not in Expo Go");
+            console.log("✅ Firebase module accessible, not in Expo Go");
+            // Kiểm tra phiên bản Firebase
+            try {
+              console.log("- Firebase SDK version:", firebase.SDK_VERSION);
+              console.log("- Firebase app name:", firebase.app()?.name);
+              console.log("- Firebase apps initialized:", firebase.apps.length);
+            } catch (versionError) {
+              console.log("⚠️ Could not get Firebase details:", versionError);
+            }
+            console.log(
+              "==================== END ENVIRONMENT CHECK ====================\n\n"
+            );
             return false;
           }
         } catch (error) {
-          console.log("[ENV DEBUG] Firebase import error:", error.message);
-          // Lỗi import có thể do đang trong Expo Go
-          return true;
+          console.log("❌ Firebase import error:", error.message);
+          console.log("Likely in Expo Go or Firebase not configured properly");
         }
 
         // Mặc định dựa vào __DEV__ nếu tất cả cách khác thất bại
         const isDev = __DEV__ && !process.env.EAS_BUILD_RUNNER;
-        console.log("[App] Using default detection method, Expo Go:", isDev);
+        console.log("⚠️ Using default detection method, Expo Go:", isDev);
+        console.log(
+          "==================== END ENVIRONMENT CHECK ====================\n\n"
+        );
         return isDev;
       } catch (error) {
-        console.error("[ENV DEBUG] Error in isExpoGo check:", error);
+        console.error("❌ Error in isExpoGo check:", error);
+        console.log(
+          "==================== END ENVIRONMENT CHECK ====================\n\n"
+        );
         // Nếu có lỗi, giả định là không chạy trong Expo Go để sử dụng Firebase thật
         return false;
       }

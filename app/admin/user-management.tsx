@@ -23,9 +23,9 @@ const { width } = Dimensions.get("window");
 const getApiBaseUrl = () => {
   if (Platform.OS === "android") {
     console.log(
-      "[USER_MANAGEMENT] Using Android API URL: http://192.168.1.6:3000/api/v1"
+      "[USER_MANAGEMENT] Using Android API URL: http://192.168.1.9:3000/api/v1"
     );
-    return "http://192.168.1.6:3000/api/v1"; // Cho Android
+    return "http://192.168.1.9:3000/api/v1"; // Cho Android
   } else if (Platform.OS === "ios") {
     // Trên iOS simulator, localhost sẽ trỏ đến máy ảo iOS
     console.log(

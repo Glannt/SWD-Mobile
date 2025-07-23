@@ -3,17 +3,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert } from "react-native";
 
 const MOCK_STORAGE_KEY = 'mock_fcm_token';
-
-// Mock FCM Token là một chuỗi giả ngẫu nhiên
-const generateMockToken = () => {
-  return 'mock-fcm-token-' + Math.random().toString(36).substring(2, 15);
-};
+// Sử dụng token cố định có thể nhận biết rõ ràng để tránh nhầm lẫn với token thật
+const FIXED_MOCK_TOKEN = 'mock-fcm-token-EXPO_GO_ENVIRONMENT-NOT_FOR_PRODUCTION';
 
 // Lưu token mock vào storage
-const saveMockToken = async (token) => {
+const saveMockToken = async () => {
   try {
-    await AsyncStorage.setItem(MOCK_STORAGE_KEY, token);
-    console.log('[Mock Firebase] Saved mock token:', token);
+    await AsyncStorage.setItem(MOCK_STORAGE_KEY, FIXED_MOCK_TOKEN);
+    console.log('[Mock Firebase] Saved mock token:', FIXED_MOCK_TOKEN);
     return true;
   } catch (error) {
     console.error('[Mock Firebase] Error saving mock token:', error);
@@ -26,13 +23,13 @@ const getMockToken = async () => {
   try {
     let token = await AsyncStorage.getItem(MOCK_STORAGE_KEY);
     if (!token) {
-      token = generateMockToken();
-      await saveMockToken(token);
+      token = FIXED_MOCK_TOKEN;
+      await saveMockToken();
     }
     return token;
   } catch (error) {
     console.error('[Mock Firebase] Error getting mock token:', error);
-    return generateMockToken();
+    return FIXED_MOCK_TOKEN;
   }
 };
 
@@ -143,6 +140,12 @@ export const getFcmToken = async () => {
 
 export const registerFcmTokenWithServer = async (token, jwt) => {
   console.log('[Mock Firebase] registerFcmTokenWithServer called');
+  
+  // Kiểm tra nếu là token mock thì log cảnh báo
+  if (token === FIXED_MOCK_TOKEN) {
+    console.warn('[Mock Firebase] WARNING: Attempting to register mock token with server - this will not work in production!');
+  }
+  
   console.log('[Mock Firebase] Token:', token);
   console.log('[Mock Firebase] JWT:', jwt ? jwt.substring(0, 10) + '...' : 'missing');
   

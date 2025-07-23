@@ -8,7 +8,7 @@ const API_BASE_URLS = {
       // Dùng 10.0.2.2 cho máy ảo Android, IP thực cho thiết bị vật lý
       emulator: 'http://10.0.2.2:3000',
       // Cấu hình IP của backend cho thiết bị vật lý - cần thay đổi cho phù hợp với mạng
-      device: 'http://192.168.1.6:3000'
+      device: 'http://192.168.1.9:3000'
     },
     ios: 'http://localhost:3000',
     web: 'http://localhost:3000'
@@ -26,7 +26,7 @@ export const getApiBaseUrl = () => {
   if (!isDev) {
     return API_BASE_URLS.production.default;
   }
-
+    
   if (Platform.OS === 'android') {
     // Trên thiết bị vật lý cần dùng IP thực của máy chủ, không phải localhost
     const isEmulator = Platform.constants.Brand === 'google';
@@ -112,7 +112,7 @@ export const fetchApi = async (endpoint, options = {}) => {
  */
 export const testApiConnection = async () => {
   try {
-    // Thử với root endpoint và nếu không được thì thử users/profile
+    // Thử với root API endpoint
     const baseUrl = getApiBaseUrl();
     const rootUrl = `${baseUrl}/api/v1`;
     
@@ -123,23 +123,22 @@ export const testApiConnection = async () => {
     
     // Kiểm tra response
     const success = response.ok || response.status === 404; // 404 vẫn có nghĩa server đang chạy
-    const statusText = response.statusText || '';
     
     console.log(
       `[API] Root API test ${success ? 'successful' : 'failed'}: `,
-      `Status: ${response.status} ${statusText}, Time: ${endTime - startTime}ms`
+      `Status: ${response.status}, Time: ${endTime - startTime}ms`
     );
     
     if (!success) {
-      // Thử lại với endpoint khác
-      return testApiConnectionWithPath('users/profile', true);
+      // Thử endpoint API thứ hai
+      return testApiConnectionWithPath('users/profile');
     }
     
     return success;
   } catch (error) {
     console.error("[API] Connection test failed with error:", error);
     // Thử lại với một endpoint khác nếu có lỗi
-    return testApiConnectionWithPath('users/profile', true);
+    return testApiConnectionWithPath('users/profile');
   }
 };
 
