@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 
 // Thêm cờ để ghi đè việc phát hiện môi trường
 export const FORCE_REAL_FIREBASE = true;
@@ -438,66 +438,34 @@ export function setupForegroundNotificationHandler(
     console.log('[FCM] Setting up foreground notification handler');
     const messaging = getMessagingModule();
     
-    if (DEBUG_FCM) {
-      console.log('[FCM_DEBUG] Adding DIRECT listener to check raw events');
-      // Thêm listener trực tiếp để xem có nhận được sự kiện hay không
-      messaging().onMessage((msg) => {
-        console.log('[FCM_DEBUG] DIRECT LISTENER TRIGGERED:', JSON.stringify(msg));
-      });
+    // Thêm kiểm tra và log debug chi tiết
+    if (typeof messaging !== 'function') {
+      console.error('[FCM] messaging is not a function:', messaging);
+      return () => {};
     }
     
-    console.log('[FCM] Creating foreground notification listener');
+    // QUAN TRỌNG: Đăng ký listener rõ ràng
+    console.log('[FCM] Creating direct onMessage listener');
+    
     const unsubscribe = messaging().onMessage(async (remoteMessage: any) => {
-      // Log chi tiết khi nhận được thông báo
+      // Log chi tiết hơn
       console.log('[FCM] ==========================================');
-      console.log('[FCM] 🔔 THÔNG BÁO MỚI NHẬN ĐƯỢC 🔔');
-      console.log('[FCM] Foreground message received! Data:', JSON.stringify(remoteMessage));
-      console.log('[FCM] Notification title:', remoteMessage?.notification?.title);
-      console.log('[FCM] Notification body:', remoteMessage?.notification?.body);
-      console.log('[FCM] Message data payload:', JSON.stringify(remoteMessage?.data));
+      console.log('[FCM] 🔔 THÔNG BÁO MỚI NHẬN ĐƯỢC (foreground) 🔔');
+      console.log('[FCM] Remote message received:', JSON.stringify(remoteMessage));
+      console.log('[FCM] Title:', remoteMessage?.notification?.title);
+      console.log('[FCM] Body:', remoteMessage?.notification?.body);
       console.log('[FCM] ==========================================');
       
-      // LUÔN hiển thị thông báo khi nhận được để không bỏ sót
-      Alert.alert(
-        remoteMessage?.notification?.title || 'Thông báo mới',
-        remoteMessage?.notification?.body || 'Bạn có thông báo mới',
-        [{ text: "OK" }]
-      );
-      
-      // Gọi callback để cập nhật state trong NotificationContext
+      // Gọi callback để cập nhật state trong NotificationContext thay vì hiển thị Alert
       onNotificationReceived(remoteMessage);
-      
-      // Chỉ phát âm hoặc rung nhẹ để thông báo có tin nhắn mới
-      try {
-        if (Platform.OS === 'android') {
-          const ReactNativeVibration = require('react-native').Vibration;
-          if (ReactNativeVibration) {
-            // Rung nhẹ 300ms
-            ReactNativeVibration.vibrate(300);
-          }
-        }
-      } catch (vibrationError) {
-        console.log('[FCM] Could not vibrate:', vibrationError);
-      }
       
       return Promise.resolve();
     });
-    
-    // Kiểm tra FCM token hiện tại khi khởi tạo
-    setTimeout(async () => {
-      try {
-        const token = await messaging().getToken();
-        console.log('[FCM] Current token during handler setup:', token?.substring(0, 15) + '...');
-      } catch (error) {
-        console.error('[FCM] Error getting token during setup:', error);
-      }
-    }, 2000);
     
     console.log('[FCM] Foreground notification handler set up successfully');
     return unsubscribe;
   } catch (error) {
     console.error('[FCM] Error setting up foreground notification handler:', error);
-    // Return a no-op unsubscribe function to avoid app crashes
     return () => {};
   }
 }

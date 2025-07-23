@@ -231,15 +231,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({
 
     console.log("[Notification] Adding new notification:", newNotification);
 
-    // Hiển thị alert để debug chỉ khi ở development mode
-    if (__DEV__) {
-      Alert.alert(
-        "Thông báo mới nhận được",
-        `Tiêu đề: ${newNotification.title}\nNội dung: ${newNotification.body}\nID: ${newNotification.id}`,
-        [{ text: "OK" }]
-      );
-    }
-
+    // Không hiện Alert nữa, chỉ thêm notification vào state
     setNotifications((prev) => {
       // Kiểm tra nếu thông báo đã tồn tại (tránh trùng lặp)
       const exists = prev.some((n) => n.id === newNotification.id);

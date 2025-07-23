@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import NotificationBell from "../../components/NotificationBell";
 import { useAuth } from "../AuthContext";
 
 // Tính toán chiều cao của TabBar để đảm bảo padding đúng
@@ -233,6 +234,7 @@ export default function AdminDashboardScreen() {
           Xin chào, {userData?.fullName || "Admin"}
         </Text>
       </View>
+      <NotificationBell />
     </View>
   );
 
@@ -609,6 +611,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
     paddingTop: Platform.OS === "android" ? 50 : 24,
     marginBottom: 8,
