@@ -12,37 +12,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { getApiBaseUrl } from "../../utils/api";
 import { useAuth } from "../AuthContext";
 
 // Tính toán chiều cao của TabBar để đảm bảo padding đúng
 const TAB_BAR_HEIGHT = Platform.OS === "ios" ? 80 : 60;
 const { width } = Dimensions.get("window");
-
-// Chọn URL API phù hợp với môi trường
-const getApiBaseUrl = () => {
-  if (Platform.OS === "android") {
-    console.log(
-      "[CHAT_SESSIONS] Using Android API URL: http://192.168.1.9:3000/api/v1"
-    );
-    return "http://192.168.1.9:3000/api/v1"; // Cho Android
-  } else if (Platform.OS === "ios") {
-    // Trên iOS simulator, localhost sẽ trỏ đến máy ảo iOS
-    console.log(
-      "[CHAT_SESSIONS] Using iOS API URL: http://localhost:3000/api/v1"
-    );
-    return "http://localhost:3000/api/v1";
-  } else if (Platform.OS === "web") {
-    // Trên web, sử dụng current host
-    const host = window.location.hostname;
-    const url = `http://${host}:3000/api/v1`;
-    console.log(`[CHAT_SESSIONS] Using Web API URL: ${url}`);
-    return url;
-  }
-  console.log(
-    "[CHAT_SESSIONS] Using fallback API URL: http://localhost:3000/api/v1"
-  );
-  return "http://localhost:3000/api/v1"; // Fallback
-};
 
 const API_BASE_URL = getApiBaseUrl();
 

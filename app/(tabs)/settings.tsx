@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Platform,
@@ -14,42 +14,16 @@ import {
 } from "react-native";
 import { NotificationPermissionModal } from "../../components/NotificationPermissionModal";
 import { checkNotificationPermission } from "../../services/firebase-messaging";
+import { getApiBaseUrl } from "../../utils/api";
 import { useAuth } from "../AuthContext";
 import { useNotification } from "../NotificationContext";
-
-// Chọn URL API phù hợp với môi trường
-const getApiBaseUrl = () => {
-  try {
-    if (
-      Platform.OS === "web" &&
-      typeof window !== "undefined" &&
-      window.location
-    ) {
-      // Trong môi trường web, sử dụng current host thay vì localhost
-      const host = window.location.hostname;
-      const port = 3000; // Giữ nguyên port
-      return `http://${host}:${port}/api/v1`;
-    } else if (Platform.OS === "ios") {
-      // Trên iOS, sử dụng địa chỉ IP thay vì localhost
-      // TODO: Thay thế bằng địa chỉ IP của máy chủ thực tế hoặc domain
-      return "http://192.168.1.9:3000/api/v1"; // Thay đổi IP này
-    } else if (Platform.OS === "android") {
-      // Trên Android có thể sử dụng 10.0.2.2 để trỏ đến localhost của máy chủ
-      return "http://192.168.1.9:3000/api/v1";
-    }
-  } catch (e) {
-    console.error("[MOBILE] Error getting API base URL:", e);
-  }
-  // Fallback nếu không xác định được
-  return "http://localhost:3000/api/v1";
-};
 
 const API_BASE_URL = getApiBaseUrl();
 
 export default function SettingsScreen() {
   const { accessToken, userId, userData, clearAuth } = useAuth();
-  const [twoFactorEnabled, setTwoFactorEnabled] = React.useState(false);
-  const [emailNotifications, setEmailNotifications] = React.useState(true);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [emailNotifications, setEmailNotifications] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const router = useRouter();

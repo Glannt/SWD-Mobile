@@ -94,6 +94,11 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
+        
+        // Thêm giá trị appAuthRedirectScheme cho expo-auth-session
+        manifestPlaceholders = [
+            appAuthRedirectScheme: "swdmobile"
+        ]
     }
     signingConfigs {
         debug {

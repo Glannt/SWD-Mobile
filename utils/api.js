@@ -1,44 +1,26 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 
 // Cấu hình API URLs
 const API_BASE_URLS = {
   development: {
     android: {
-      // Dùng 10.0.2.2 cho máy ảo Android, IP thực cho thiết bị vật lý
-      emulator: 'http://10.0.2.2:3000/api/v1',
-      // Cấu hình IP của backend cho thiết bị vật lý - cần thay đổi cho phù hợp với mạng
-      device: 'http://192.168.1.9:3000/api/v1'
+      // Sử dụng API đã được deploy
+      emulator: 'https://swd-be-1-2-3.onrender.com/api/v1',
+      device: 'https://swd-be-1-2-3.onrender.com/api/v1'
     },
-    ios: 'http://localhost:3000/api/v1',
-    web: 'http://localhost:3000/api/v1'
+    ios: 'https://swd-be-1-2-3.onrender.com/api/v1',
+    web: 'https://swd-be-1-2-3.onrender.com/api/v1'
   },
   production: {
     // URL production thực tế 
-    default: 'https://api.example.com/api/v1'
+    default: 'https://swd-be-1-2-3.onrender.com/api/v1'
   }
 };
 
 // Xác định URL cơ sở dựa trên môi trường
 export const getApiBaseUrl = () => {
-  const isDev = __DEV__;
-  let baseUrl;
-  
-  if (!isDev) {
-    baseUrl = API_BASE_URLS.production.default;
-  } else if (Platform.OS === 'android') {
-    // Trên thiết bị vật lý cần dùng IP thực của máy chủ, không phải localhost
-    const isEmulator = Platform.constants.Brand === 'google';
-    console.log('[API] Android environment detected, emulator?', isEmulator);
-    baseUrl = isEmulator ? 
-      API_BASE_URLS.development.android.emulator : 
-      API_BASE_URLS.development.android.device;
-  } else if (Platform.OS === 'ios') {
-    baseUrl = API_BASE_URLS.development.ios;
-  } else {
-    baseUrl = API_BASE_URLS.development.web;
-  }
-  
+  // Luôn sử dụng URL đã được deploy
+  const baseUrl = 'https://swd-be-1-2-3.onrender.com/api/v1';
   console.log('[API] Using base URL:', baseUrl);
   return baseUrl;
 };

@@ -4,11 +4,23 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
+import * as Linking from "expo-linking";
 import { Redirect, SplashScreen, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as WebBrowser from "expo-web-browser";
 import { useEffect } from "react";
-import { Platform } from "react-native";
+import { LogBox, Platform } from "react-native";
 import "react-native-reanimated";
+
+// Tắt tất cả cảnh báo hiển thị trên giao diện
+LogBox.ignoreAllLogs();
+
+// Đăng ký để xử lý các phiên xác thực
+WebBrowser.maybeCompleteAuthSession();
+
+// Cấu hình prefixes cho deep linking
+const prefix = Linking.createURL("/");
+const scheme = "swdmobile";
 
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { AuthProvider } from "./AuthContext";
@@ -29,6 +41,67 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
+
+  // Xử lý deep linking khi ứng dụng đã được mở
+  useEffect(() => {
+    // Kiểm tra URL ban đầu
+    const getInitialURL = async () => {
+      try {
+        const initialURL = await Linking.getInitialURL();
+        console.log("[DeepLink DEBUG] App khởi động với URL:", initialURL);
+
+        if (initialURL) {
+          console.log("[DeepLink DEBUG] Phân tích URL khởi động:", {
+            url: initialURL,
+            isOAuthCallback: initialURL.includes("oauth-callback"),
+          });
+
+          // Parse params từ URL
+          try {
+            const urlObj = new URL(initialURL);
+            console.log(
+              "[DeepLink DEBUG] URL params:",
+              Array.from(urlObj.searchParams.entries())
+            );
+          } catch (parseError) {
+            console.error("[DeepLink DEBUG] Không thể parse URL:", parseError);
+          }
+        }
+      } catch (error) {
+        console.error("[DeepLink DEBUG] Lỗi khi lấy URL khởi động:", error);
+      }
+    };
+
+    // Lắng nghe URL mới
+    const handleNewURL = (event: { url: string }) => {
+      console.log("[DeepLink DEBUG] Nhận URL mới:", event.url);
+
+      // Parse params từ URL
+      try {
+        const urlObj = new URL(event.url);
+        console.log(
+          "[DeepLink DEBUG] New URL params:",
+          Array.from(urlObj.searchParams.entries())
+        );
+        console.log(
+          "[DeepLink DEBUG] Có phải OAuth callback?",
+          event.url.includes("oauth-callback")
+        );
+      } catch (parseError) {
+        console.error("[DeepLink DEBUG] Không thể parse URL mới:", parseError);
+      }
+    };
+
+    console.log("[DeepLink DEBUG] Đăng ký lắng nghe URL events");
+    const subscription = Linking.addEventListener("url", handleNewURL);
+
+    getInitialURL();
+
+    return () => {
+      console.log("[DeepLink DEBUG] Hủy đăng ký lắng nghe URL events");
+      subscription.remove();
+    };
+  }, []);
 
   // Thiết lập Firebase và ẩn splash screen sau khi đã sẵn sàng
   useEffect(() => {
