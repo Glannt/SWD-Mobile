@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   FlatList,
   Platform,
@@ -208,8 +207,8 @@ export default function AdminDashboardScreen() {
         );
       }
     } catch (error) {
+      // Chỉ ghi log lỗi mà không hiển thị Alert
       console.error("[DASHBOARD] Error fetching data:", error);
-      Alert.alert("Lỗi", "Không thể lấy dữ liệu từ máy chủ");
     } finally {
       setLoading(false);
     }

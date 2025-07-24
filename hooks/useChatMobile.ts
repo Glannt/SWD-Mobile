@@ -2,31 +2,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { useAuth } from "../app/AuthContext";
+import { getApiBaseUrl } from "../utils/api";
 
-// Chọn URL API phù hợp với môi trường
-const getApiBaseUrl = () => {
-  try {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
-      // Trong môi trường web, sử dụng current host thay vì localhost
-      const host = window.location.hostname;
-      const port = 3000; // Giữ nguyên port
-      return `http://${host}:${port}/api/v1`;
-    } else if (Platform.OS === 'ios') {
-      // Trên iOS, sử dụng địa chỉ IP thay vì localhost
-      // TODO: Thay thế bằng địa chỉ IP của máy chủ thực tế hoặc domain
-      return 'http://192.168.1.9:3000/api/v1'; // Thay đổi IP này
-    } else if (Platform.OS === 'android') {
-      // Trên Android có thể sử dụng 10.0.2.2 để trỏ đến localhost của máy chủ
-      console.log("Using Android API");
-      return 'http://192.168.1.9:3000/api/v1'; // Thay đổi IP này
-    }
-  } catch (e) {
-    console.error('[MOBILE] Error getting API base URL:', e);
-  }
-  // Fallback nếu không xác định được
-  return 'http://localhost:3000/api/v1';
-};
-
+// Use the getApiBaseUrl function from utils/api.js
 const API_BASE_URL = getApiBaseUrl();
 
 // Kiểm tra nếu đang trong web environment

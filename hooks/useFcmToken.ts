@@ -52,9 +52,15 @@ export const useFcmToken = () => {
   const [token, setToken] = useState<string | null>(null);
   
   // Đăng ký FCM token
-  const registerFcmToken = async (): Promise<boolean> => {
+  const registerFcmToken = async (userRole?: string): Promise<boolean> => {
     try {
       console.log('[FCM] Starting FCM token registration');
+      
+      // Kiểm tra vai trò người dùng - chỉ đăng ký cho admin
+      if (userRole && userRole !== 'admin') {
+        console.log('[FCM] User is not an admin, skipping FCM token registration');
+        return false;
+      }
       
       // Xác định môi trường
       const isExpoGoEnv = checkIsExpoGo();
@@ -177,9 +183,19 @@ export const useFcmToken = () => {
    * Đăng ký lại FCM token sau khi đăng nhập thành công 
    * Gọi hàm này trong handler đăng nhập thành công
    */
-  const registerFcmTokenAfterLogin = async (jwt: string): Promise<boolean> => {
+  const registerFcmTokenAfterLogin = async (jwt: string, userData?: any): Promise<boolean> => {
     try {
       console.log('[FCM] Registering FCM token after successful login');
+      
+      // Kiểm tra vai trò người dùng - chỉ đăng ký cho admin
+      const userRole = userData?.role || '';
+      if (userRole !== 'admin') {
+        console.log('[FCM] User is not an admin (role: ' + userRole + '), skipping FCM token registration');
+        // Không xóa token hiện tại cho non-admin users, chỉ bỏ qua quá trình đăng ký
+        return false;
+      }
+      
+      console.log('[FCM] User is admin, proceeding with token registration');
       
       // Lấy token hiện tại nếu có
       const currentToken = await AsyncStorage.getItem(FCM_TOKEN_STORAGE_KEY);
@@ -192,12 +208,12 @@ export const useFcmToken = () => {
       
       if (!currentToken) {
         // Nếu chưa có token, tạo mới
-        console.log('[FCM] No token found, creating new token');
-        return await registerFcmToken();
+        console.log('[FCM] No token found, creating new token for admin');
+        return await registerFcmToken('admin');
       }
       
       // Nếu có token, đăng ký với server
-      console.log('[FCM] Registering existing token with server after login');
+      console.log('[FCM] Registering existing token with server after login for admin');
       
       // Log chi tiết về token và JWT
       console.log('[FCM] =================== LOGIN TOKEN REGISTRATION ===================');
@@ -205,6 +221,7 @@ export const useFcmToken = () => {
       console.log('[FCM] Token length:', currentToken.length);
       console.log('[FCM] JWT available:', !!jwt);
       console.log('[FCM] JWT first 15 chars:', jwt.substring(0, 15) + '...');
+      console.log('[FCM] User role:', userRole);
       console.log('[FCM] ===============================================================');
       
       // Đăng ký token với server

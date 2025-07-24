@@ -6,39 +6,41 @@ const API_BASE_URLS = {
   development: {
     android: {
       // Dùng 10.0.2.2 cho máy ảo Android, IP thực cho thiết bị vật lý
-      emulator: 'http://10.0.2.2:3000',
+      emulator: 'http://10.0.2.2:3000/api/v1',
       // Cấu hình IP của backend cho thiết bị vật lý - cần thay đổi cho phù hợp với mạng
-      device: 'http://192.168.1.9:3000'
+      device: 'http://192.168.1.9:3000/api/v1'
     },
-    ios: 'http://localhost:3000',
-    web: 'http://localhost:3000'
+    ios: 'http://localhost:3000/api/v1',
+    web: 'http://localhost:3000/api/v1'
   },
   production: {
     // URL production thực tế 
-    default: 'https://api.example.com'
+    default: 'https://api.example.com/api/v1'
   }
 };
 
 // Xác định URL cơ sở dựa trên môi trường
 export const getApiBaseUrl = () => {
   const isDev = __DEV__;
+  let baseUrl;
   
   if (!isDev) {
-    return API_BASE_URLS.production.default;
-  }
-    
-  if (Platform.OS === 'android') {
+    baseUrl = API_BASE_URLS.production.default;
+  } else if (Platform.OS === 'android') {
     // Trên thiết bị vật lý cần dùng IP thực của máy chủ, không phải localhost
     const isEmulator = Platform.constants.Brand === 'google';
     console.log('[API] Android environment detected, emulator?', isEmulator);
-    return isEmulator ? API_BASE_URLS.development.android.emulator : API_BASE_URLS.development.android.device;
+    baseUrl = isEmulator ? 
+      API_BASE_URLS.development.android.emulator : 
+      API_BASE_URLS.development.android.device;
+  } else if (Platform.OS === 'ios') {
+    baseUrl = API_BASE_URLS.development.ios;
+  } else {
+    baseUrl = API_BASE_URLS.development.web;
   }
   
-  if (Platform.OS === 'ios') {
-    return API_BASE_URLS.development.ios;
-  }
-  
-  return API_BASE_URLS.development.web;
+  console.log('[API] Using base URL:', baseUrl);
+  return baseUrl;
 };
 
 /**
@@ -52,8 +54,8 @@ export const buildApiUrl = (endpoint, queryParams = {}) => {
   // Đảm bảo endpoint không bắt đầu bằng '/' để tránh double slash
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
   
-  // Tạo URL cơ bản
-  let url = `${baseUrl}/api/v1/${cleanEndpoint}`;
+  // Tạo URL cơ bản - không thêm /api/v1 vì đã có trong baseUrl
+  let url = `${baseUrl}/${cleanEndpoint}`;
   
   // Thêm query parameters nếu có
   if (Object.keys(queryParams).length > 0) {
@@ -114,7 +116,8 @@ export const testApiConnection = async () => {
   try {
     // Thử với root API endpoint
     const baseUrl = getApiBaseUrl();
-    const rootUrl = `${baseUrl}/api/v1`;
+    // Lấy URL cơ sở không bao gồm /api/v1
+    const rootUrl = baseUrl.replace('/api/v1', '');
     
     console.log("[API] Testing connection to root API:", rootUrl);
     const startTime = Date.now();

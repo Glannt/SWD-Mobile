@@ -133,7 +133,7 @@ export default function ChatSessionsManagementScreen() {
     setLoading(true);
     try {
       console.log(
-        `[CHAT_SESSIONS] Fetching sessions from API: ${API_BASE_URL}/admin/dashboard/sessions`
+        `[CHAT_SESSIONS] Fetching chat sessions from API: ${API_BASE_URL}/admin/dashboard/sessions`
       );
 
       const response = await fetch(`${API_BASE_URL}/admin/dashboard/sessions`, {
@@ -144,9 +144,9 @@ export default function ChatSessionsManagementScreen() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log("[CHAT_SESSIONS] Sessions data:", data);
+        console.log("[CHAT_SESSIONS] Sessions raw data:", data);
 
-        // Flatten the data structure to match what the UI expects
+        // Flatten the data structure
         const flattenedSessions: ChatSession[] = [];
         const sessionsArray = data.data || data;
 
@@ -174,10 +174,12 @@ export default function ChatSessionsManagementScreen() {
           response.status,
           await response.text()
         );
+        // Lưu lại lỗi trong state nhưng không hiển thị lên UI
         setError("Không thể tải danh sách phiên chat");
       }
     } catch (error) {
       console.error("[CHAT_SESSIONS] Error fetching sessions data:", error);
+      // Lưu lại lỗi trong state nhưng không hiển thị lên UI
       setError("Đã xảy ra lỗi khi tải danh sách phiên chat");
     } finally {
       setLoading(false);
@@ -296,17 +298,6 @@ export default function ChatSessionsManagementScreen() {
           <Text style={styles.loadingText}>
             Đang tải danh sách phiên chat...
           </Text>
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#f56565" />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={fetchChatSessions}
-          >
-            <Text style={styles.retryButtonText}>Thử lại</Text>
-          </TouchableOpacity>
         </View>
       ) : filteredSessions.length === 0 ? (
         <View style={styles.emptyContainer}>

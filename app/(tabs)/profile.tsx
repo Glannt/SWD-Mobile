@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useFcmToken } from "../../hooks/useFcmToken";
 import { useAuth } from "../AuthContext";
 
 // Chọn URL API phù hợp với môi trường
@@ -273,6 +274,9 @@ export default function ProfileScreen() {
   const { accessToken, userId, setAuth, clearAuth } = useAuth();
   const router = useRouter();
 
+  // FCM token registration hook - đặt ở cấp cao nhất của component
+  const { registerFcmTokenAfterLogin } = useFcmToken();
+
   // Kiểm tra trạng thái đăng nhập mỗi khi component được mount hoặc accessToken thay đổi
   useEffect(() => {
     console.log("[PROFILE] Checking auth state, accessToken:", !!accessToken);
@@ -403,10 +407,24 @@ export default function ProfileScreen() {
       // Lưu thông tin đăng nhập vào AuthContext và lưu toàn bộ userData
       setAuth(token, userId, userObjectId, userData);
 
+      // Đăng ký FCM token nếu là admin
+      try {
+        // Đăng ký token với server, truyền thêm userData để kiểm tra role
+        console.log(
+          "[PROFILE] Attempting to register FCM token with role check"
+        );
+        await registerFcmTokenAfterLogin(token, userData);
+      } catch (fcmError: any) {
+        console.error(
+          "[PROFILE] Error registering FCM token after login:",
+          fcmError
+        );
+      }
+
       setIsLoggedIn(true);
       setEmail("");
       setPassword("");
-    } catch (error) {
+    } catch (error: any) {
       console.error("[PROFILE] Login error:", error);
       setLoginError(error.message || "Có lỗi xảy ra");
     } finally {

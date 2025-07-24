@@ -15,8 +15,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useChatHistory } from "../../hooks/useChatHistory";
 import { useChatMobile } from "../../hooks/useChatMobile";
 import { getApiBaseUrl } from "../../utils/api";
+import { formatDate } from "../../utils/dateUtils";
 import { useAuth } from "../AuthContext";
 
 // Component cho hiệu ứng loading
@@ -63,6 +65,7 @@ export default function ChatScreen() {
   const { accessToken, userId } = useAuth();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const chat = useChatMobile({ accessToken, userId });
+  const chatHistory = useChatHistory();
   const [input, setInput] = useState("");
   const flatListRef = useRef(null);
   const [showSessions, setShowSessions] = useState(false);
@@ -72,6 +75,7 @@ export default function ChatScreen() {
   const reconnectTimeoutRef = useRef(null);
   const API_BASE_URL = getApiBaseUrl();
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
 
   // Kiểm tra trạng thái đăng nhập
   useEffect(() => {
@@ -86,6 +90,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (isLoggedIn) {
       chat.loadSessions();
+      chatHistory.loadSessions();
       // Thiết lập hệ thống kiểm tra kết nối
       startConnectionMonitoring();
     }
@@ -97,6 +102,13 @@ export default function ChatScreen() {
         clearTimeout(reconnectTimeoutRef.current);
     };
   }, [isLoggedIn]);
+
+  // Load lại danh sách phiên chat khi mở modal
+  useEffect(() => {
+    if (showSessions && isLoggedIn) {
+      chatHistory.loadSessions();
+    }
+  }, [showSessions, isLoggedIn]);
 
   // Hệ thống theo dõi kết nối
   const startConnectionMonitoring = () => {
@@ -117,7 +129,10 @@ export default function ChatScreen() {
     if (!sessionId || !accessToken) return;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/chatsession/${sessionId}`, {
+      const url = buildApiUrl(`chatsession/${sessionId}`);
+      console.log(`[MOBILE] Pinging session with URL: ${url}`);
+
+      const res = await fetch(url, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
@@ -205,10 +220,32 @@ export default function ChatScreen() {
     }
   }, [chat.messages, isLoggedIn]);
 
-  // Khi chọn session
+  // Khi chọn session từ lịch sử
   const handleSelectSession = async (session) => {
     setShowSessions(false);
-    await chat.selectSession(session);
+    setIsLoading(true);
+
+    try {
+      console.log("[MOBILE] Selecting session:", session.sessionId);
+
+      // Update the current session in the chat context
+      chat.setCurrentSession(session);
+
+      // Load messages for this session
+      await chat.selectSession(session);
+
+      console.log(
+        `[MOBILE] Loaded ${chat.messages.length} messages for session`
+      );
+    } catch (error) {
+      console.error("[MOBILE] Error selecting session:", error);
+      Alert.alert(
+        "Lỗi",
+        "Không thể tải tin nhắn cho đoạn chat này. Vui lòng thử lại sau."
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Khi tạo chat mới
@@ -246,6 +283,7 @@ export default function ChatScreen() {
 
       // Tải lại danh sách session sau khi tạo mới
       await chat.loadSessions();
+      await chatHistory.loadSessions();
 
       // Thiết lập lại hệ thống theo dõi kết nối
       startConnectionMonitoring();
@@ -349,8 +387,8 @@ export default function ChatScreen() {
           <Ionicons name="chatbubbles-outline" size={20} color="#ff6600" />
           <Text style={chatStyles.sessionBtnText}>
             {chat.currentSession
-              ? `Chat ${chat.currentSession.sessionId.slice(-6)}`
-              : "Chọn chat"}
+              ? `Lịch sử chat (${chat.currentSession.sessionId.slice(-6)})`
+              : "Lịch sử chat"}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -382,12 +420,13 @@ export default function ChatScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Modal chọn session */}
+      {/* Modal chọn session - Đã được cải tiến để hiển thị lịch sử chat */}
       <Modal visible={showSessions} transparent animationType="fade">
         <View style={chatStyles.modalOverlay}>
           <View style={chatStyles.modalBox}>
             <Text style={chatStyles.modalTitle}>Lịch sử chat</Text>
-            {chat.isLoading ? (
+
+            {chatHistory.isLoading ? (
               <View style={{ padding: 20, alignItems: "center" }}>
                 <ActivityIndicator size="small" color="#ff6600" />
                 <Text style={{ marginTop: 10, color: "#888" }}>
@@ -396,45 +435,68 @@ export default function ChatScreen() {
               </View>
             ) : (
               <FlatList
-                data={chat.sessions}
+                data={chatHistory.sessions}
                 keyExtractor={(item) => item.sessionId}
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={chatStyles.sessionItem}
                     onPress={() => handleSelectSession(item)}
                   >
-                    <Text
-                      style={{
-                        color:
-                          chat.currentSession?.sessionId === item.sessionId
-                            ? "#ff6600"
-                            : "#23232b",
-                      }}
-                    >
-                      Chat {item.sessionId.slice(-6)}
-                    </Text>
+                    <View style={chatStyles.sessionIcon}>
+                      <Ionicons
+                        name="chatbubble-ellipses-outline"
+                        size={18}
+                        color="#ff6600"
+                      />
+                    </View>
+                    <View style={chatStyles.sessionInfo}>
+                      <Text style={chatStyles.sessionId}>
+                        Chat {item.sessionId.slice(-6)}
+                      </Text>
+                      {item.createdAt && (
+                        <Text style={chatStyles.sessionDate}>
+                          {formatDate(new Date(item.createdAt))}
+                        </Text>
+                      )}
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#bbb" />
                   </TouchableOpacity>
                 )}
                 ListEmptyComponent={
-                  <Text style={{ color: "#888", textAlign: "center" }}>
+                  <Text
+                    style={{ color: "#888", textAlign: "center", padding: 20 }}
+                  >
                     Chưa có cuộc trò chuyện nào
                   </Text>
                 }
               />
             )}
-            <TouchableOpacity
-              style={chatStyles.closeModalBtn}
-              onPress={() => setShowSessions(false)}
-            >
-              <Text style={{ color: "#ff6600", fontWeight: "bold" }}>Đóng</Text>
-            </TouchableOpacity>
+
+            <View style={chatStyles.modalActions}>
+              <TouchableOpacity
+                style={chatStyles.closeModalBtn}
+                onPress={() => setShowSessions(false)}
+              >
+                <Text style={{ color: "#ff6600", fontWeight: "bold" }}>
+                  Đóng
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={chatStyles.refreshBtn}
+                onPress={() => chatHistory.loadSessions()}
+                disabled={chatHistory.isLoading}
+              >
+                <Ionicons name="refresh" size={18} color="#888" />
+                <Text style={chatStyles.refreshText}>Làm mới</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
 
       {/* Nội dung chat */}
       <View style={chatStyles.body}>
-        {chat.isLoading ? (
+        {isLoading || chat.isLoading ? (
           <View style={chatStyles.centered}>
             <ActivityIndicator size="large" color="#ff6600" />
             <Text style={{ marginTop: 10, color: "#666" }}>Đang tải...</Text>
@@ -563,7 +625,7 @@ const chatStyles = StyleSheet.create({
     marginTop: 10,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
     color: "#23232b",
     marginTop: 10,
@@ -576,8 +638,15 @@ const chatStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     marginRight: 8,
+    minWidth: 120,
+    justifyContent: "center",
   },
-  sessionBtnText: { color: "#ff6600", fontWeight: "bold", marginLeft: 6 },
+  sessionBtnText: {
+    color: "#ff6600",
+    fontWeight: "bold",
+    marginLeft: 6,
+    fontSize: 13,
+  },
   newChatBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -610,22 +679,67 @@ const chatStyles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 12,
     padding: 20,
-    width: 300,
-    maxHeight: 400,
-    alignItems: "center",
+    width: "90%",
+    maxWidth: 360,
+    maxHeight: "80%",
   },
-  modalTitle: { fontWeight: "bold", fontSize: 18, marginBottom: 12 },
+  modalTitle: {
+    fontWeight: "bold",
+    fontSize: 18,
+    marginBottom: 12,
+    textAlign: "center",
+  },
   sessionItem: {
-    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
     width: "100%",
   },
-  closeModalBtn: {
+  sessionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#fff7ed",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  sessionInfo: {
+    flex: 1,
+  },
+  sessionId: {
+    color: "#23232b",
+    fontWeight: "500",
+    fontSize: 14,
+  },
+  sessionDate: {
+    color: "#888",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginTop: 16,
-    alignSelf: "center",
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+  },
+  closeModalBtn: {
     padding: 8,
+  },
+  refreshBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 8,
+  },
+  refreshText: {
+    color: "#888",
+    fontSize: 14,
+    marginLeft: 4,
   },
   body: { flex: 1, paddingHorizontal: 12 },
   welcomeBox: {

@@ -169,10 +169,12 @@ export default function UserManagementScreen() {
           response.status,
           await response.text()
         );
+        // Set error state but don't display to user
         setError("Không thể tải danh sách người dùng");
       }
     } catch (error) {
       console.error("[USER_MANAGEMENT] Error fetching users data:", error);
+      // Set error state but don't display to user
       setError("Đã xảy ra lỗi khi tải danh sách người dùng");
     } finally {
       setLoading(false);
@@ -466,14 +468,6 @@ export default function UserManagementScreen() {
           <Text style={styles.loadingText}>
             Đang tải danh sách người dùng...
           </Text>
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color="#f56565" />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchUsers}>
-            <Text style={styles.retryButtonText}>Thử lại</Text>
-          </TouchableOpacity>
         </View>
       ) : filteredUsers.length === 0 ? (
         <View style={styles.emptyContainer}>
