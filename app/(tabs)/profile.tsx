@@ -679,8 +679,8 @@ export default function ProfileScreen() {
   // Thêm hàm xử lý đăng nhập Google
   const handleGoogleLogin = async () => {
     try {
-      // Chuyển hướng đến màn hình external-auth để tiến hành đăng nhập Google
-      router.push("/external-auth");
+      // Chuyển hướng đến màn hình externalAuth để tiến hành đăng nhập Google
+      router.push("/externalAuth");
     } catch (error) {
       console.error("Lỗi khi chuyển hướng đến trang đăng nhập Google:", error);
       Alert.alert(

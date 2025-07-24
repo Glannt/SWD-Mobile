@@ -34,13 +34,13 @@ const MENU_ITEMS = [
     id: "users",
     title: "User Management",
     icon: "people-outline",
-    route: "/admin/user-management",
+    route: "/admin/userManagement",
   },
   {
     id: "chat-sessions",
     title: "Quản lý Chat Sessions",
     icon: "chatbubbles-outline",
-    route: "/admin/chat-sessions",
+    route: "/admin/chatSessions",
   },
 ];
 
@@ -55,14 +55,6 @@ export default function AdminDashboardScreen() {
   });
   const [sessions, setSessions] = useState([]);
   const [chatUsers, setChatUsers] = useState([]);
-  const [monthlyData, setMonthlyData] = useState({
-    target: "$20K",
-    revenue: "$20K",
-    today: "$20K",
-    targetTrend: "down", // 'up' or 'down'
-    revenueTrend: "up",
-    todayTrend: "up",
-  });
   const [activeMenuItem, setActiveMenuItem] = useState("dashboard");
 
   // Kiểm tra xem user có quyền admin không ngay khi vào trang
@@ -345,109 +337,6 @@ export default function AdminDashboardScreen() {
             </View>
           </View>
 
-          {/* Monthly Target Card */}
-          <View style={styles.section}>
-            <View style={styles.monthlyTargetCard}>
-              <View style={styles.monthlyTargetHeader}>
-                <View>
-                  <Text style={styles.monthlyTargetTitle}>
-                    Mục tiêu hàng tháng
-                  </Text>
-                  <Text style={styles.monthlyTargetSubtitle}>
-                    Mục tiêu bạn đã đặt cho mỗi tháng
-                  </Text>
-                </View>
-                <TouchableOpacity>
-                  <Ionicons name="ellipsis-vertical" size={20} color="#666" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Radial chart placeholder */}
-              <View style={styles.radialChartContainer}>
-                <View style={styles.radialChart}>
-                  <Text style={styles.radialChartValue}>75.55%</Text>
-                </View>
-                <View style={styles.progressBadge}>
-                  <Text style={styles.progressBadgeText}>+10%</Text>
-                </View>
-              </View>
-
-              <Text style={styles.monthlyTargetMessage}>
-                Bạn kiếm được 3.287$ hôm nay, cao hơn tháng trước. Hãy tiếp tục
-                phát huy!
-              </Text>
-
-              {/* Stats row */}
-              <View style={styles.monthlyStatsRow}>
-                <View style={styles.monthlyStat}>
-                  <Text style={styles.monthlyStatLabel}>Mục tiêu</Text>
-                  <View style={styles.monthlyStatValueContainer}>
-                    <Text style={styles.monthlyStatValue}>
-                      {monthlyData.target}
-                    </Text>
-                    <Ionicons
-                      name={
-                        monthlyData.targetTrend === "up"
-                          ? "arrow-up"
-                          : "arrow-down"
-                      }
-                      size={16}
-                      color={
-                        monthlyData.targetTrend === "up" ? "#039855" : "#D92D20"
-                      }
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.statDivider} />
-
-                <View style={styles.monthlyStat}>
-                  <Text style={styles.monthlyStatLabel}>Doanh thu</Text>
-                  <View style={styles.monthlyStatValueContainer}>
-                    <Text style={styles.monthlyStatValue}>
-                      {monthlyData.revenue}
-                    </Text>
-                    <Ionicons
-                      name={
-                        monthlyData.revenueTrend === "up"
-                          ? "arrow-up"
-                          : "arrow-down"
-                      }
-                      size={16}
-                      color={
-                        monthlyData.revenueTrend === "up"
-                          ? "#039855"
-                          : "#D92D20"
-                      }
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.statDivider} />
-
-                <View style={styles.monthlyStat}>
-                  <Text style={styles.monthlyStatLabel}>Hôm nay</Text>
-                  <View style={styles.monthlyStatValueContainer}>
-                    <Text style={styles.monthlyStatValue}>
-                      {monthlyData.today}
-                    </Text>
-                    <Ionicons
-                      name={
-                        monthlyData.todayTrend === "up"
-                          ? "arrow-up"
-                          : "arrow-down"
-                      }
-                      size={16}
-                      color={
-                        monthlyData.todayTrend === "up" ? "#039855" : "#D92D20"
-                      }
-                    />
-                  </View>
-                </View>
-              </View>
-            </View>
-          </View>
-
           {/* Bảng session chat */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Danh sách session chat</Text>
@@ -666,113 +555,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
     textAlign: "center",
-  },
-  monthlyTargetCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  monthlyTargetHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#fff",
-  },
-  monthlyTargetTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#23232b",
-  },
-  monthlyTargetSubtitle: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 4,
-  },
-  radialChartContainer: {
-    height: 200,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fff",
-    position: "relative",
-  },
-  radialChart: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    borderWidth: 12,
-    borderColor: "#465fff",
-    alignItems: "center",
-    justifyContent: "center",
-    // Create a semi-circle effect
-    borderTopColor: "#e2e8f0",
-    borderRightColor: "#e2e8f0",
-    transform: [{ rotate: "-45deg" }],
-  },
-  radialChartValue: {
-    fontSize: 30,
-    fontWeight: "bold",
-    color: "#23232b",
-    transform: [{ rotate: "45deg" }],
-  },
-  progressBadge: {
-    position: "absolute",
-    bottom: 10,
-    backgroundColor: "rgba(3, 152, 85, 0.1)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  progressBadgeText: {
-    color: "#039855",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  monthlyTargetMessage: {
-    textAlign: "center",
-    color: "#666",
-    fontSize: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: "#fff",
-  },
-  monthlyStatsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 16,
-    backgroundColor: "#f8fafc",
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-  },
-  monthlyStat: {
-    alignItems: "center",
-  },
-  monthlyStatLabel: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 4,
-  },
-  monthlyStatValueContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  monthlyStatValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#23232b",
-    marginRight: 4,
-  },
-  statDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: "#e2e8f0",
   },
   tableContainer: {
     backgroundColor: "#fff",

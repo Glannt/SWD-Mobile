@@ -10,12 +10,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useNotification } from "../app/NotificationContext";
+import { useNotifications } from "../app/NotificationContext";
 
 const { width } = Dimensions.get("window");
 
 export default function NotificationBell() {
-  const { notifications, unreadCount, markAllAsRead } = useNotification();
+  const { notifications, unreadCount, markAllAsRead } = useNotifications();
   const [showModal, setShowModal] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
   const bellRef = useRef(null);

@@ -13,10 +13,10 @@ import {
   View,
 } from "react-native";
 import { NotificationPermissionModal } from "../../components/NotificationPermissionModal";
-import { checkNotificationPermission } from "../../services/firebase-messaging";
+import { checkNotificationPermission } from "../../services/firebaseMessaging";
 import { getApiBaseUrl } from "../../utils/api";
 import { useAuth } from "../AuthContext";
-import { useNotification } from "../NotificationContext";
+import { useNotifications } from "../NotificationContext";
 
 const API_BASE_URL = getApiBaseUrl();
 
@@ -27,7 +27,7 @@ export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const router = useRouter();
-  const { setupUserNotifications } = useNotification();
+  const { initialize } = useNotifications();
 
   // Kiểm tra đăng nhập
   const isLoggedIn = !!accessToken;
@@ -79,8 +79,9 @@ export default function SettingsScreen() {
   };
 
   // Xử lý sau khi đăng ký thông báo thành công
-  const handleNotificationSuccess = () => {
+  const handleNotificationSuccess = async () => {
     setNotificationsEnabled(true);
+    await initialize();
     Alert.alert("Thành công", "Bạn đã đăng ký nhận thông báo thành công!", [
       { text: "OK" },
     ]);

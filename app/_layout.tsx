@@ -53,7 +53,7 @@ export default function RootLayout() {
         if (initialURL) {
           console.log("[DeepLink DEBUG] Phân tích URL khởi động:", {
             url: initialURL,
-            isOAuthCallback: initialURL.includes("oauth-callback"),
+            isOAuthCallback: initialURL.includes("oauthCallback"),
           });
 
           // Parse params từ URL
@@ -85,7 +85,7 @@ export default function RootLayout() {
         );
         console.log(
           "[DeepLink DEBUG] Có phải OAuth callback?",
-          event.url.includes("oauth-callback")
+          event.url.includes("oauthCallback")
         );
       } catch (parseError) {
         console.error("[DeepLink DEBUG] Không thể parse URL mới:", parseError);
@@ -243,7 +243,7 @@ export default function RootLayout() {
 
           // Đảm bảo tải mock service thành công
           try {
-            const mockFirebase = require("../services/mock-firebase");
+            const mockFirebase = require("../services/mockFirebase");
             mockFirebase.setupForegroundNotificationHandler(() => {
               console.log("[Mock Firebase] Test foreground handler called");
             });

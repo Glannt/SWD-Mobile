@@ -33,13 +33,13 @@ const MENU_ITEMS = [
     id: "users",
     title: "User Management",
     icon: "people-outline",
-    route: "/admin/user-management",
+    route: "/admin/userManagement",
   },
   {
     id: "chat-sessions",
     title: "Quản lý Chat Sessions",
     icon: "chatbubbles-outline",
-    route: "/admin/chat-sessions",
+    route: "/admin/chatSessions",
   },
 ];
 

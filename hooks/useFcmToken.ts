@@ -8,17 +8,17 @@ export const FORCE_REAL_ENVIRONMENT = true;
 
 /**
  * Kiểm tra môi trường Expo Go
- * Sử dụng cùng một phương pháp phát hiện với firebase-messaging.ts
+ * Sử dụng cùng một phương pháp phát hiện với firebaseMessaging.ts
  */
 const checkIsExpoGo = () => {
-  // Sử dụng phương pháp phát hiện từ firebase-messaging.ts để đồng bộ
+  // Sử dụng phương pháp phát hiện từ firebaseMessaging.ts để đồng bộ
   try {
-    const firebaseMessaging = require('../services/firebase-messaging');
+    const firebaseMessaging = require('../services/firebaseMessaging');
     return firebaseMessaging.isRunningInExpoGo();
   } catch (error) {
-    console.error('[FCM] Error using firebase-messaging environment detection:', error);
+    console.error('[FCM] Error using firebaseMessaging environment detection:', error);
     
-    // Fallback nếu không thể import firebase-messaging
+    // Fallback nếu không thể import firebaseMessaging
     // Check override flag first
     if (FORCE_REAL_ENVIRONMENT) {
       console.log('[FCM] FORCE_REAL_ENVIRONMENT is enabled, using real Firebase implementation');
@@ -69,10 +69,10 @@ export const useFcmToken = () => {
       if (isExpoGoEnv) {
         console.log('[FCM] Running in Expo Go - using mock');
         
-        // Import firebase-messaging service trực tiếp để tránh circular dependency
+        // Import firebaseMessaging service trực tiếp để tránh circular dependency
         try {
           // Sử dụng trực tiếp mock firebase
-          const mockFirebase = require('../services/mock-firebase');
+            const mockFirebase = require('../services/mockFirebase');
           const mockToken = await mockFirebase.getFcmToken();
           
           if (mockToken) {
@@ -92,7 +92,7 @@ export const useFcmToken = () => {
       
       try {
         // Import dynamically để tránh lỗi
-        const firebaseMessaging = require('../services/firebase-messaging');
+        const firebaseMessaging = require('../services/firebaseMessaging');
         
         // Kiểm tra token đã lưu trước - tránh tạo token mới nếu không cần thiết
         const savedToken = await AsyncStorage.getItem(FCM_TOKEN_STORAGE_KEY);
@@ -203,8 +203,8 @@ export const useFcmToken = () => {
       // Xác định môi trường
       const isExpoGoEnv = checkIsExpoGo();
       const firebaseMessaging = isExpoGoEnv 
-        ? require('../services/mock-firebase')
-        : require('../services/firebase-messaging');
+        ? require('../services/mockFirebase')
+        : require('../services/firebaseMessaging');
       
       if (!currentToken) {
         // Nếu chưa có token, tạo mới

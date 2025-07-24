@@ -49,7 +49,7 @@ export default function ExternalAuthScreen() {
   const handleOpenBrowser = async () => {
     try {
       // Tạo URL redirect dùng scheme của app
-      const redirectUrl = "swdmobile://oauth-callback";
+      const redirectUrl = "swdmobile://oauthCallback";
 
       // Tạo URL đăng nhập Google
       const baseUrl = "https://swd-be-1-2-3.onrender.com/api/v1";

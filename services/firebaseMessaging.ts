@@ -109,7 +109,7 @@ const getMessagingModule = () => {
   try {
     if (isRunningInExpoGo()) {
       console.log('[FCM] Running in Expo Go - using mock');
-      return require('./mock-firebase').default;
+      return require('./mockFirebase').default;
     }
 
     // Chỉ import firebase khi không ở trong Expo Go
@@ -137,7 +137,7 @@ const getMessagingModule = () => {
         }
       } catch (appError) {
         console.error('[FCM] Firebase app import error:', appError);
-        return require('./mock-firebase').default;
+        return require('./mockFirebase').default;
       }
     }
 
@@ -158,14 +158,14 @@ const getMessagingModule = () => {
         console.log('[FCM] Firebase messaging module loaded successfully');
       } catch (messagingError) {
         console.error('[FCM] Firebase messaging import error:', messagingError);
-        return require('./mock-firebase').default;
+        return require('./mockFirebase').default;
       }
     }
 
     return firebaseMessagingInstance;
   } catch (error) {
     console.error('[FCM] Error getting Firebase messaging module:', error);
-    return require('./mock-firebase').default;
+    return require('./mockFirebase').default;
   }
 };
 
@@ -179,7 +179,7 @@ export async function checkNotificationPermission() {
     if (isRunningInExpoGo()) {
       // Sử dụng trực tiếp hàm trong mock
       console.log('[FCM] Using mock permission check');
-      const mockFirebase = require('./mock-firebase');
+      const mockFirebase = require('./mockFirebase');
       return await mockFirebase.checkNotificationPermission();
     }
     
@@ -212,7 +212,7 @@ export async function requestNotificationPermission() {
     if (isRunningInExpoGo()) {
       // Sử dụng trực tiếp hàm trong mock
       console.log('[FCM] Using mock permission request');
-      const mockFirebase = require('./mock-firebase');
+      const mockFirebase = require('./mockFirebase');
       return await mockFirebase.requestNotificationPermission();
     }
     
@@ -266,7 +266,7 @@ export async function getFcmToken() {
     // Xử lý khác nhau cho Expo Go và build thật
     if (isRunningInExpoGo()) {
       console.log('[FCM] Using mock token in Expo Go');
-      const mockFirebase = require('./mock-firebase');
+      const mockFirebase = require('./mockFirebase');
       const token = await mockFirebase.getFcmToken();
       
       if (token) {

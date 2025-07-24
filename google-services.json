@@ -1,33 +1,33 @@
 {
   "project_info": {
-    "project_number": "321128844526",
-    "project_id": "swd392-5c9d5",
-    "storage_bucket": "swd392-5c9d5.firebasestorage.app"
+    "project_number": "816941944331",
+    "project_id": "db-wsb-project",
+    "storage_bucket": "db-wsb-project.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:321128844526:android:35428250bc97c054a9b7ff",
+        "mobilesdk_app_id": "1:816941944331:android:a4178619ea59e11eee410e",
         "android_client_info": {
           "package_name": "com.anonymous.SWDMobile"
         }
       },
       "oauth_client": [
         {
-          "client_id": "321128844526-9j0s82f1ukhlu1ja949ckih117dlfgk5.apps.googleusercontent.com",
+          "client_id": "816941944331-vpbeg45l5lrclbc3606uvvl6g9mideah.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAoE8WK6egxKO5jCUJ7Q3_8Dn0ASfoA218"
+          "current_key": "AIzaSyAyJUEVySYAdyvfdzZPA4EtCceT0tZwYNA"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "321128844526-9j0s82f1ukhlu1ja949ckih117dlfgk5.apps.googleusercontent.com",
+              "client_id": "816941944331-3h11utnm9a0si6mlmmt45bcfff6sl7ec.apps.googleusercontent.com",
               "client_type": 3
             }
           ]
